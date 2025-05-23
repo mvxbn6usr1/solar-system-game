@@ -12,6 +12,7 @@ export class EnhancedARLabelSystem {
         this.enabled = true;
         this.labelContainer = new THREE.Object3D();
         this.labelContainer.name = 'EnhancedARLabels';
+        this.labelContainer.renderOrder = 1000; // Ensure AR labels render above other objects
         scene.add(this.labelContainer);
         
         // Enhanced configuration with filtering and clustering
@@ -55,7 +56,7 @@ export class EnhancedARLabelSystem {
                 onlyTargetable: false // Only show targetable objects
             },
             
-            // Colors with enhanced states
+            // Visual appearance
             colors: {
                 friendly: '#00ff88',
                 neutral: '#00aaff',
@@ -63,15 +64,16 @@ export class EnhancedARLabelSystem {
                 planet: '#4488ff',
                 moon: '#888888',
                 station: '#00ffcc',
-                star: '#ffcc00',
-                clustered: '#666666',
-                priority: '#ffff00',
-                scanning: '#ff00ff'
+                star: '#ffcc00'
             }
         };
         
-        // Screen space tracking for collision detection
+        // Screen position tracking for clustering
         this.screenPositions = new Map();
+        
+        console.log("Enhanced AR Label System initialized");
+        
+        // Screen space tracking for collision detection
         this.frameCount = 0;
         
         // Performance optimization
@@ -112,12 +114,13 @@ export class EnhancedARLabelSystem {
             depthTest: false,
             depthWrite: false,
             blending: THREE.AdditiveBlending,
-            opacity: 0
+            opacity: 1.0,
+            alphaTest: 0.001 // Prevent z-fighting
         });
         
         const sprite = new THREE.Sprite(spriteMaterial);
         sprite.name = `${data.name}_enhanced_ar_label`;
-        sprite.renderOrder = 1000 + enhancedData.priority;
+        sprite.renderOrder = 2000 + enhancedData.priority; // Very high render order to appear above HUD
         
         // Store references
         sprite.userData = {
@@ -135,6 +138,11 @@ export class EnhancedARLabelSystem {
         // Add to container and map
         this.labelContainer.add(sprite);
         this.labels.set(data.name, sprite);
+        
+        // Update the label content immediately
+        this.updateARLabelContent(sprite, object, enhancedData, null, context, texture, canvas);
+        
+        console.log(`Created AR label for ${data.name} with render order ${sprite.renderOrder}`);
         
         return sprite;
     }
@@ -157,27 +165,58 @@ export class EnhancedARLabelSystem {
         return priority;
     }
     
-    updateAll(playerShip, celestialObjects, enemies = []) {
-        if (!this.enabled || !playerShip) return;
+    updateAll(playerShip, celestialObjects, enemies) {
+        if (!this.enabled) {
+            // Hide all labels when disabled
+            this.labels.forEach(sprite => {
+                sprite.visible = false;
+            });
+            return;
+        }
         
+        if (!playerShip) {
+            console.warn("AR Labels: No player ship provided for update");
+            return;
+        }
+        
+        // Ensure we have objects to label
+        this.ensureLabelsExist(celestialObjects || [], enemies || []);
+        
+        // Update label states and manage visibility
+        this.updateLabelStates(playerShip);
+        
+        // Update individual label content and positioning
+        this.labels.forEach((sprite, name) => {
+            if (sprite.visible && sprite.userData.data.visible) {
+                // Update the sprite position to match its object
+                const object = sprite.userData.object;
+                if (object) {
+                    const worldPos = new THREE.Vector3();
+                    object.getWorldPosition(worldPos);
+                    sprite.position.copy(worldPos);
+                    
+                    // Update label content
+                    this.updateARLabelContent(
+                        sprite, 
+                        object, 
+                        sprite.userData.data, 
+                        playerShip, 
+                        sprite.userData.context, 
+                        sprite.userData.texture, 
+                        sprite.userData.canvas
+                    );
+                }
+            }
+        });
+        
+        // Increment frame counter for performance optimizations
         this.frameCount++;
         
-        // Add new labels for objects that don't have them
-        this.ensureLabelsExist(celestialObjects, enemies);
-        
-        // Update label priorities and visibility
-        if (this.frameCount % this.updateInterval === 0) {
-            this.updateLabelStates(playerShip);
+        // Debug info every few seconds
+        if (this.frameCount % 180 === 0) { // Every ~3 seconds at 60fps
+            const visibleCount = Array.from(this.labels.values()).filter(s => s.visible).length;
+            console.log(`AR Labels: ${visibleCount}/${this.labels.size} visible, enabled: ${this.enabled}`);
         }
-        
-        // Perform clustering check
-        if (this.frameCount - this.lastClusterUpdate > this.clusterUpdateInterval) {
-            this.performClustering();
-            this.lastClusterUpdate = this.frameCount;
-        }
-        
-        // Update visible labels
-        this.updateVisibleLabels(playerShip);
     }
     
     ensureLabelsExist(celestialObjects, enemies) {
@@ -652,14 +691,17 @@ export class EnhancedARLabelSystem {
     // Cockpit integration methods
     setFilters(filters) {
         Object.assign(this.config.filters, filters);
+        console.log('AR Labels filters updated:', this.config.filters);
     }
     
-    setMaxLabels(max) {
-        this.config.maxLabelsVisible = max;
+    setMaxLabels(maxLabels) {
+        this.config.maxLabelsVisible = maxLabels;
+        console.log(`AR Labels max visible set to ${maxLabels}`);
     }
     
     setRangeFilter(range) {
         this.config.filters.maxRange = range;
+        console.log(`AR Labels range filter set to ${range}`);
     }
     
     highlightObject(objectName) {
@@ -707,7 +749,16 @@ export class EnhancedARLabelSystem {
     
     setEnabled(enabled) {
         this.enabled = enabled;
+        
+        // Immediately show/hide all labels
+        this.labels.forEach(sprite => {
+            sprite.visible = enabled;
+        });
+        
+        // Show/hide the entire container
         this.labelContainer.visible = enabled;
+        
+        console.log(`AR Labels ${enabled ? 'enabled' : 'disabled'}, ${this.labels.size} labels affected`);
     }
     
     dispose() {

@@ -208,9 +208,12 @@ export class StarshipHUD {
             this.miniMap3D.setVisible(visible);
         }
         
-        // Toggle AR labels with HUD visibility
+        // Toggle AR labels with HUD visibility and ensure they're enabled when HUD is shown
         if (this.arLabels) {
             this.arLabels.setEnabled(visible && this.showARLabels);
+            if (visible && this.showARLabels) {
+                console.log("AR Labels enabled with HUD");
+            }
         }
     }
     

@@ -2406,18 +2406,42 @@ document.addEventListener('keydown', (e) => {
                 break;
             // Combat controls
             case ' ': // Spacebar - fire weapons
-                if (combatSystem && !e.repeat) {
+                if (!combatSystem) {
+                    console.warn("Combat system not initialized!");
+                    showFloatingFeedback("COMBAT SYSTEM OFFLINE", "#ff3333");
+                    break;
+                }
+                
+                if (!starship) {
+                    console.warn("Player ship not available!");
+                    showFloatingFeedback("SHIP SYSTEMS OFFLINE", "#ff3333");
+                    break;
+                }
+                
+                if (!e.repeat) {
+                    console.log("Firing weapons...");
                     const shipConfig = getShipConfig('Starship_Calypso');
                     
                     // Fire from each weapon hardpoint
+                    let weaponsFired = 0;
                     shipConfig.weaponHardpoints.forEach((hardpoint, index) => {
                         if (index < 2) { // Fire only main cannons on spacebar
-                            combatSystem.firePlayerWeapon(index);
-                            
-                            // Visual effects are handled by combat system which properly transforms positions
-                            // We don't need to call createWeaponFireEffect here as firePlayerWeapon already creates the projectile
+                            try {
+                                combatSystem.firePlayerWeapon(index);
+                                weaponsFired++;
+                                console.log(`Fired weapon ${index}`);
+                            } catch (error) {
+                                console.error(`Failed to fire weapon ${index}:`, error);
+                            }
                         }
                     });
+                    
+                    if (weaponsFired === 0) {
+                        console.warn("No weapons fired successfully");
+                        showFloatingFeedback("WEAPONS MALFUNCTION", "#ffaa00");
+                    } else {
+                        console.log(`${weaponsFired} weapons fired successfully`);
+                    }
                 }
                 break;
             case 'g': // Spawn test enemy
@@ -4427,36 +4451,59 @@ function initializeStarshipMode() {
 }
 
 function initializeStarshipSystems() {
+    console.log("Initializing starship systems...");
+    
     // Initialize combat system only if not already initialized
     if (!combatSystem) {
         combatSystem = new CombatSystem(scene, camera);
-        // Set player ship if it exists
-        if (starship) {
-            combatSystem.setPlayerShip(starship);
-        }
+        console.log("Combat system initialized");
     }
+    
+    // Always ensure player ship is set if it exists
+    if (combatSystem && starship) {
+        combatSystem.setPlayerShip(starship);
+        console.log("Player ship set on combat system");
+    }
+    
     if (!enhancedWeaponEffects) {
         enhancedWeaponEffects = new EnhancedWeaponEffects(scene);
         // Make it globally available for combat system callbacks
         window.enhancedWeaponEffects = enhancedWeaponEffects;
+        console.log("Enhanced weapon effects initialized");
     }
+    
     if (!targetingOverlay) {
         targetingOverlay = new TargetingOverlay(scene, camera, renderer);
         // Add targeting overlay canvas to document if not already added
         if (targetingOverlay.canvas && !targetingOverlay.canvas.parentElement) {
             document.body.appendChild(targetingOverlay.canvas);
         }
+        console.log("Targeting overlay initialized");
     }
+    
     if (!improvedHitboxes) {
         improvedHitboxes = new ImprovedHitboxes();
+        console.log("Improved hitboxes initialized");
     }
+    
     if (!stationInteraction) {
         stationInteraction = new StationInteraction(scene);
+        console.log("Station interaction initialized");
     }
+    
     if (!arLabelSystem) {
         arLabelSystem = new EnhancedARLabelSystem(scene, camera);
         starshipHUD.setARLabelSystem(arLabelSystem);
+        console.log("Enhanced AR label system initialized and connected to HUD");
     }
+    
+    // Auto-spawn an enemy for testing combat systems
+    setTimeout(() => {
+        if (isStarshipMode && combatSystem && combatSystem.aiShips.size === 0) {
+            console.log("Auto-spawning test enemy for combat testing");
+            spawnTestEnemy();
+        }
+    }, 2000); // Spawn after 2 seconds to ensure everything is loaded
 }
 
 function enterStarshipMode() {

@@ -382,7 +382,31 @@ input[type=range] {
   position: fixed; /* Ensure it covers the whole screen */
   top: 0;
   left: 0;
-  z-index: 2000; /* High z-index */
+  z-index: 1000; /* Reduced from 2000 to allow AR labels above */
+}
+
+/* AR Labels and THREE.js canvas should have higher z-index */
+canvas {
+  position: relative;
+  z-index: 500; /* Base layer for 3D scene */
+}
+
+/* AR Labels specific styling */
+.ar-label-system {
+  z-index: 1500 !important; /* Higher than HUD */
+  pointer-events: none;
+}
+
+/* Enhanced AR Labels container */
+.enhanced-ar-labels {
+  z-index: 1500 !important;
+  pointer-events: none;
+}
+
+/* AR Label controls should be interactive */
+.ar-controls-container {
+  pointer-events: auto !important;
+  z-index: 1001; /* Just above HUD */
 }
 
 /* Cockpit Frame - bottom console always visible and responsive */
