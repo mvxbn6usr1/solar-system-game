@@ -1,0 +1,506 @@
+/* Enhanced Starship Cockpit Styles */
+/* Builds upon ui.css with additional futuristic elements */
+
+/* CSS Variables for easy theming */
+:root {
+    --hud-primary-color: #00ffff;
+    --hud-secondary-color: #00ff88;
+    --hud-warning-color: #ffaa00;
+    --hud-danger-color: #ff3344;
+    --hud-neutral-color: #8899aa;
+    --hud-bg-primary: rgba(10, 25, 40, 0.85);
+    --hud-bg-secondary: rgba(0, 50, 100, 0.3);
+    --hud-border-color: rgba(0, 150, 255, 0.4);
+    --hud-brightness: 1;
+}
+
+/* Cockpit Control Panel Styles */
+#cockpit-control-panel {
+    font-family: 'Orbitron', monospace !important;
+    box-shadow: 0 0 20px rgba(0, 150, 255, 0.3), inset 0 0 10px rgba(0, 100, 150, 0.1);
+    backdrop-filter: blur(10px);
+}
+
+#cockpit-control-panel button {
+    font-family: 'Orbitron', monospace !important;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+#cockpit-control-panel select {
+    font-family: 'Orbitron', monospace !important;
+    background: rgba(0, 50, 100, 0.3);
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    color: #00ffff;
+}
+
+#cockpit-control-panel option {
+    background: rgba(10, 25, 40, 0.95);
+    color: #00ffff;
+}
+
+/* AR Label Toggle Button */
+.ar-toggle-btn {
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: bold;
+    transition: all 0.3s ease !important;
+}
+
+.ar-toggle-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 10px currentColor;
+}
+
+/* Enhanced Tactical Panel */
+#tactical-panel {
+    backdrop-filter: blur(8px);
+    background: linear-gradient(135deg, 
+        rgba(10, 30, 50, 0.9) 0%, 
+        rgba(10, 30, 50, 0.85) 50%, 
+        rgba(0, 20, 40, 0.85) 100%) !important;
+}
+
+#tactical-panel::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, 
+        transparent 0%, 
+        rgba(0, 150, 255, 0.05) 50%, 
+        transparent 100%);
+    animation: tactical-scan 4s linear infinite;
+    pointer-events: none;
+}
+
+@keyframes tactical-scan {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+/* Enhanced AR Labels */
+.enhanced-ar-label {
+    filter: drop-shadow(0 0 3px currentColor);
+}
+
+/* Priority AR Labels */
+.ar-label-priority {
+    animation: priority-pulse 1s ease-in-out infinite;
+}
+
+@keyframes priority-pulse {
+    0%, 100% { 
+        filter: drop-shadow(0 0 5px var(--hud-primary-color));
+        transform: scale(1);
+    }
+    50% { 
+        filter: drop-shadow(0 0 15px var(--hud-primary-color));
+        transform: scale(1.05);
+    }
+}
+
+/* Clustered AR Labels */
+.ar-label-clustered {
+    opacity: 0.6;
+    filter: blur(0.5px);
+}
+
+/* Target Lock Animation for AR Labels */
+.ar-label-locked {
+    animation: target-lock 0.3s ease-out;
+}
+
+@keyframes target-lock {
+    0% { transform: scale(1.5); opacity: 0.5; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* Cockpit Glass Effect */
+#starship-hud::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: 
+        radial-gradient(ellipse at center top, transparent 40%, rgba(0, 50, 100, 0.05) 100%),
+        radial-gradient(ellipse at center bottom, transparent 40%, rgba(0, 50, 100, 0.05) 100%);
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* HUD Brightness Control */
+#starship-hud * {
+    opacity: calc(1 * var(--hud-brightness));
+}
+
+/* Enhanced Console Sections */
+.console-section {
+    position: relative;
+    overflow: visible;
+}
+
+.console-section::before {
+    content: '';
+    position: absolute;
+    top: -5px;
+    left: -5px;
+    right: -5px;
+    bottom: -5px;
+    background: linear-gradient(45deg, 
+        transparent, 
+        rgba(0, 150, 255, 0.1), 
+        transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+}
+
+.console-section:hover::before {
+    opacity: 1;
+}
+
+/* Enhanced Attitude Indicator */
+#attitudeCanvas {
+    position: relative;
+}
+
+#attitudeCanvas::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    height: 90%;
+    border: 1px solid rgba(0, 255, 255, 0.2);
+    border-radius: 50%;
+    pointer-events: none;
+    animation: attitude-rotate 30s linear infinite;
+}
+
+@keyframes attitude-rotate {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Combat Mode HUD Adjustments */
+.hud-combat-mode {
+    --hud-primary-color: #ff6644;
+    --hud-border-color: rgba(255, 100, 50, 0.4);
+}
+
+.hud-combat-mode .console-header {
+    color: #ff8866;
+}
+
+.hud-combat-mode .hud-label {
+    color: #ffaa88;
+}
+
+/* Exploration Mode HUD Adjustments */
+.hud-exploration-mode {
+    --hud-primary-color: #44ff88;
+    --hud-border-color: rgba(50, 255, 150, 0.4);
+}
+
+.hud-exploration-mode .console-header {
+    color: #66ff99;
+}
+
+.hud-exploration-mode .hud-label {
+    color: #88ffaa;
+}
+
+/* Enhanced System Status Bars */
+.hud-value-bar {
+    position: relative;
+    background: linear-gradient(90deg, 
+        rgba(0, 50, 100, 0.3) 0%, 
+        rgba(0, 80, 120, 0.5) 100%);
+}
+
+.hud-value-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: repeating-linear-gradient(
+        90deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 150, 255, 0.1) 2px,
+        rgba(0, 150, 255, 0.1) 4px
+    );
+    pointer-events: none;
+}
+
+/* Critical System Warning */
+.hud-value-bar.critical {
+    animation: critical-flash 0.5s ease-in-out infinite;
+}
+
+@keyframes critical-flash {
+    0%, 100% { border-color: rgba(255, 0, 0, 0.3); }
+    50% { border-color: rgba(255, 0, 0, 0.8); }
+}
+
+/* Navigation Waypoint Indicator */
+.nav-waypoint {
+    position: fixed;
+    width: 40px;
+    height: 40px;
+    border: 2px solid rgba(0, 255, 100, 0.6);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 1050;
+}
+
+.nav-waypoint::before,
+.nav-waypoint::after {
+    content: '';
+    position: absolute;
+    background: rgba(0, 255, 100, 0.6);
+}
+
+.nav-waypoint::before {
+    width: 2px;
+    height: 15px;
+    left: 50%;
+    bottom: 100%;
+    transform: translateX(-50%);
+}
+
+.nav-waypoint::after {
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 12px solid rgba(0, 255, 100, 0.6);
+    left: 50%;
+    bottom: calc(100% + 15px);
+    transform: translateX(-50%);
+}
+
+/* Minimap Zoom Controls */
+.minimap-zoom-controls {
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    display: flex;
+    gap: 2px;
+}
+
+.minimap-zoom-btn {
+    width: 20px;
+    height: 20px;
+    background: rgba(0, 150, 255, 0.2);
+    border: 1px solid rgba(0, 200, 255, 0.4);
+    color: #00ffff;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.minimap-zoom-btn:hover {
+    background: rgba(0, 150, 255, 0.4);
+    transform: scale(1.1);
+}
+
+/* Power Distribution Visual */
+.power-distribution-visual {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+    padding: 5px;
+    background: rgba(0, 50, 100, 0.2);
+    border-radius: 4px;
+}
+
+.power-bar {
+    flex: 1;
+    height: 30px;
+    margin: 0 2px;
+    background: rgba(0, 100, 150, 0.3);
+    border: 1px solid rgba(0, 150, 255, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.power-bar-fill {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, 
+        rgba(0, 200, 255, 0.8), 
+        rgba(0, 150, 255, 0.4));
+    transition: height 0.3s ease;
+}
+
+.power-bar-label {
+    position: absolute;
+    bottom: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    color: #fff;
+    text-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
+    z-index: 1;
+}
+
+/* Enhanced Cockpit Frame Effects */
+.cockpit-frame-left,
+.cockpit-frame-right {
+    position: absolute;
+    top: 0;
+    width: 100px;
+    height: 100%;
+    background: linear-gradient(to bottom, 
+        rgba(10, 20, 35, 0), 
+        rgba(10, 20, 35, 0.6));
+    pointer-events: none;
+    z-index: 4;
+}
+
+.cockpit-frame-left {
+    left: 0;
+    background: linear-gradient(to right, 
+        rgba(10, 20, 35, 0.8), 
+        transparent);
+}
+
+.cockpit-frame-right {
+    right: 0;
+    background: linear-gradient(to left, 
+        rgba(10, 20, 35, 0.8), 
+        transparent);
+}
+
+/* Screen Edge Warning Indicators */
+.edge-warning {
+    position: fixed;
+    background: rgba(255, 100, 0, 0.2);
+    pointer-events: none;
+    z-index: 1100;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.edge-warning.active {
+    opacity: 1;
+    animation: edge-pulse 1s ease-in-out infinite;
+}
+
+.edge-warning-top {
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 20px;
+    background: linear-gradient(to bottom, 
+        rgba(255, 100, 0, 0.4), 
+        transparent);
+}
+
+.edge-warning-bottom {
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 20px;
+    background: linear-gradient(to top, 
+        rgba(255, 100, 0, 0.4), 
+        transparent);
+}
+
+.edge-warning-left {
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 20px;
+    background: linear-gradient(to right, 
+        rgba(255, 100, 0, 0.4), 
+        transparent);
+}
+
+.edge-warning-right {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 20px;
+    background: linear-gradient(to left, 
+        rgba(255, 100, 0, 0.4), 
+        transparent);
+}
+
+@keyframes edge-pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+/* Responsive Design Adjustments */
+@media (max-width: 1200px) {
+    .cockpit-console {
+        font-size: 0.9em;
+    }
+    
+    #tactical-panel {
+        width: 240px !important;
+        height: 280px !important;
+    }
+    
+    #cockpit-control-panel {
+        width: 280px;
+    }
+}
+
+@media (max-width: 768px) {
+    .cockpit-console {
+        height: 180px;
+        min-height: 160px;
+        font-size: 0.85em;
+    }
+    
+    .console-section {
+        padding: 8px 10px;
+    }
+    
+    #attitudeCanvas {
+        max-width: 120px;
+        max-height: 120px;
+    }
+    
+    #tactical-panel,
+    #cockpit-control-panel {
+        display: none; /* Hide on mobile for now */
+    }
+}
+
+/* Performance Optimizations */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+    :root {
+        --hud-bg-primary: rgba(0, 0, 0, 0.95);
+        --hud-border-color: rgba(255, 255, 255, 0.8);
+    }
+    
+    .hud-label {
+        font-weight: bold;
+    }
+}

@@ -1,0 +1,1493 @@
+/* Glassmorphism floating panel for solar system UI */
+#solar-ui-panel.glass-panel {
+  position: fixed;
+  top: 32px;
+  right: 32px;
+  min-width: 280px;
+  width: 300px;
+  z-index: 1000;
+  background: rgba(30, 30, 40, 0.7);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.18);
+  color: #fff;
+  font-family: 'Segoe UI', 'Arial', sans-serif;
+  padding: 0 18px 18px 18px;
+  user-select: none;
+  transition: box-shadow 0.2s;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+#solar-ui-panel.glass-panel:active {
+  box-shadow: 0 4px 16px 0 rgba(31, 38, 135, 0.27);
+}
+.panel-header {
+  font-size: 1.2em;
+  font-weight: 600;
+  margin: 0 -18px 12px -18px;
+  padding: 12px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  cursor: move;
+  background: rgba(40,40,60,0.25);
+  border-radius: 18px 18px 0 0;
+}
+.panel-section {
+  margin-bottom: 14px;
+}
+.panel-tip {
+  font-size: 0.85em;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 4px 0;
+  text-align: center;
+  margin-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+/* Planet options styling */
+.planet-options {
+  border-top: 1px solid rgba(108, 204, 255, 0.2);
+  padding-top: 10px;
+  margin-top: 10px;
+  padding-bottom: 10px;
+}
+.option-toggle, .option-slider {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 4px 0;
+  min-height: 30px;
+}
+.option-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #6cf;
+}
+.option-toggle label {
+  flex-grow: 1;
+}
+/* Feature heading inside planet options */
+.option-heading {
+  font-size: 0.9em;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  color: rgba(108, 204, 255, 0.8);
+  text-align: center;
+}
+label {
+  font-size: 0.98em;
+  margin-right: 8px;
+}
+select, input[type=range] {
+  width: 100%;
+  margin-top: 4px;
+  margin-bottom: 2px;
+  background: rgba(255,255,255,0.08);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 1em;
+  padding: 4px 6px;
+}
+input[type=range] {
+  accent-color: #6cf;
+  height: 2px;
+}
+
+/* Toggle button for auto-follow */
+.toggle-button {
+  width: 100%;
+  padding: 8px 12px;
+  background: rgba(108, 204, 255, 0.2);
+  border: 1px solid rgba(108, 204, 255, 0.4);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 1em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.toggle-button:hover {
+  background: rgba(108, 204, 255, 0.3);
+}
+.toggle-button:active {
+  background: rgba(108, 204, 255, 0.4);
+  transform: translateY(1px);
+} 
+
+/* Telemetry panel */
+.telemetry-panel {
+  position: fixed;
+  bottom: 32px;
+  left: 32px;
+  width: 340px;
+  z-index: 1000;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: rgba(30, 30, 40, 0.7);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.18);
+  color: #fff;
+  font-family: 'Segoe UI', 'Arial', sans-serif;
+  padding: 0 18px 18px 18px;
+  user-select: none;
+  transition: box-shadow 0.2s;
+}
+.telemetry-panel:active {
+  box-shadow: 0 4px 16px 0 rgba(31, 38, 135, 0.27);
+}
+.telemetry-content {
+  padding: 0 10px;
+}
+.telemetry-name {
+  font-size: 1.3em;
+  font-weight: 600;
+  margin: 0 0 15px 0;
+  text-align: center;
+  color: rgba(108, 204, 255, 0.9);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 8px;
+}
+.telemetry-section-header {
+  font-size: 0.9em;
+  font-weight: 600;
+  margin: 15px 0 10px 0;
+  color: rgba(108, 204, 255, 0.8);
+  background: rgba(40, 40, 60, 0.4);
+  padding: 5px 10px;
+  border-radius: 8px;
+}
+.telemetry-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 0.98em;
+}
+.telemetry-label {
+  color: rgba(255, 255, 255, 0.7);
+}
+.telemetry-value {
+  color: white;
+  font-weight: 500;
+}
+.telemetry-message {
+  text-align: center;
+  padding: 20px 0;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+}
+.time-exponent-container, .micro-time-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  background: rgba(40, 40, 60, 0.3);
+  border-radius: 8px;
+  padding: 5px;
+}
+.time-exponent-value, .micro-time-value {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #6cf;
+  padding: 0 10px;
+  min-width: 50px;
+  text-align: center;
+}
+.time-exponent-btn, .micro-time-btn {
+  background: rgba(108, 204, 255, 0.2);
+  border: 1px solid rgba(108, 204, 255, 0.4);
+  border-radius: 4px;
+  color: white;
+  font-size: 1.2em;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.time-exponent-btn:hover, .micro-time-btn:hover {
+  background: rgba(108, 204, 255, 0.3);
+}
+.time-exponent-btn:active, .micro-time-btn:active {
+  background: rgba(108, 204, 255, 0.4);
+  transform: scale(0.95);
+}
+.live-time-readout {
+  font-size: 1.05em;
+  color: #fff;
+  background: rgba(40, 40, 60, 0.18);
+  border-radius: 8px;
+  padding: 4px 10px;
+  margin-top: 8px;
+  text-align: center;
+  font-family: 'Segoe UI', 'Arial', sans-serif;
+  letter-spacing: 0.02em;
+}
+
+/* Time scale exponent controls */
+.time-exponent-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  background: rgba(40, 40, 60, 0.3);
+  border-radius: 6px;
+  padding: 5px;
+}
+
+.time-exponent-value {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #6cf;
+  padding: 0 10px;
+  min-width: 50px;
+  text-align: center;
+}
+
+.time-exponent-btn {
+  background: rgba(108, 204, 255, 0.2);
+  border: 1px solid rgba(108, 204, 255, 0.4);
+  border-radius: 4px;
+  color: white;
+  font-size: 1.2em;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.time-exponent-btn:hover {
+  background: rgba(108, 204, 255, 0.3);
+}
+
+.time-exponent-btn:active {
+  background: rgba(108, 204, 255, 0.4);
+  transform: scale(0.95);
+}
+
+/* Make panel draggable */
+#solar-ui-panel, #orbital-telemetry {
+  cursor: move;
+}
+
+/* Time Scale Slider */
+.current-time-scale {
+  font-size: 1.05em;
+  font-weight: 600;
+  color: #6cf;
+  text-align: center;
+  padding: 6px 0;
+  margin: 8px 0;
+  background: rgba(40, 40, 60, 0.3);
+  border-radius: 6px;
+}
+
+.time-scale-slider {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 16px 0;
+  padding: 0;
+  height: 30px;
+}
+
+.time-scale-btn {
+  background: rgba(108, 204, 255, 0.2);
+  border: 1px solid rgba(108, 204, 255, 0.4);
+  border-radius: 6px;
+  color: white;
+  width: 36px;
+  height: 30px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.time-scale-btn:hover {
+  background: rgba(108, 204, 255, 0.3);
+}
+
+.time-scale-btn:active {
+  background: rgba(108, 204, 255, 0.4);
+  transform: scale(0.95);
+}
+
+.time-scale-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.time-scale-notches {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-grow: 1;
+  margin: 0 8px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  position: relative;
+}
+
+.time-scale-notch {
+  width: 10px;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.time-scale-notch:hover {
+  background: rgba(108, 204, 255, 0.8);
+  transform: scale(1.2);
+}
+
+.time-scale-notch.active {
+  background: #6cf;
+  width: 12px;
+  height: 12px;
+  box-shadow: 0 0 6px #6cf;
+}
+
+.simulation-speed-display {
+  font-size: 0.9em;
+  color: rgba(255, 255, 255, 0.85);
+  text-align: center;
+  padding: 4px 0;
+  margin-top: 4px;
+  background: rgba(40, 40, 60, 0.15);
+  border-radius: 4px;
+}
+
+/* --- Starship HUD Overlay --- */
+#starship-hud {
+  font-family: 'Orbitron', 'Segoe UI', 'Arial', sans-serif; /* Futuristic font */
+  color: #0ff; /* Bright teal for text */
+  text-shadow: 0 0 5px rgba(0, 255, 255, 0.5); /* Subtle glow */
+  pointer-events: none; /* HUD itself should not catch mouse events */
+  width: 100vw;
+  height: 100vh;
+  position: fixed; /* Ensure it covers the whole screen */
+  top: 0;
+  left: 0;
+  z-index: 2000; /* High z-index */
+}
+
+/* Cockpit Frame - bottom console always visible and responsive */
+.cockpit-frame-bottom {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100vw;
+    height: 200px;
+    min-height: 160px;
+    max-height: 30vh;
+    background: linear-gradient(to bottom, rgba(10, 20, 35, 0), rgba(10, 20, 35, 0.85));
+    pointer-events: none;
+    z-index: 5;
+}
+
+.cockpit-console {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 98vw;
+    max-width: 1600px;
+    min-width: 600px;
+    height: 220px;
+    min-height: 180px;
+    max-height: 35vh;
+    background: rgba(10, 25, 40, 0.88);
+    border: 1.5px solid rgba(0, 150, 255, 0.45);
+    border-radius: 15px 15px 0 0;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: stretch;
+    padding: 0 20px 10px 20px;
+    z-index: 10;
+    box-shadow: 0 0 25px rgba(0, 150, 255, 0.25), inset 0 0 15px rgba(0, 200, 255, 0.15);
+}
+
+.console-section {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    align-items: center;
+    height: 100%;
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 10px 15px;
+    overflow: hidden;
+}
+
+.console-section-left, .console-section-right {
+    align-items: flex-start;
+}
+
+.console-section-center {
+    align-items: center;
+    justify-content: center;
+    min-width: 220px;
+    max-width: 400px;
+}
+
+.console-header {
+    font-size: 1.1em;
+    color: #00eaff;
+    text-transform: uppercase;
+    margin: 0 0 12px 0;
+    width: 100%;
+    text-align: center;
+    border-bottom: 1px solid rgba(0, 150, 255, 0.35);
+    padding-bottom: 6px;
+    letter-spacing: 0.1em;
+}
+
+.system-status, .flight-stats, .target-info, .nav-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 2px;
+    width: 100%;
+    align-items: flex-start;
+}
+
+.flight-stats {
+    align-items: center;
+}
+
+.thrust-indicators {
+    display: flex;
+    justify-content: center;
+    gap: 18px;
+    margin-top: 2px;
+}
+
+.hud-value-bar {
+    background-color: rgba(0, 80, 120, 0.5);
+    height: 10px;
+    width: 70px;
+    border: 1px solid rgba(0, 128, 255, 0.3);
+    border-radius: 2px;
+    overflow: hidden;
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0 5px;
+}
+
+.shield-bar-fill, .hull-bar-fill {
+    height: 100%;
+    background-color: #00ffcc;
+    transition: width 0.3s ease-out;
+}
+
+.hull-bar-fill {
+    background-color: #ffaa00;
+}
+
+.power-value {
+    color: #00ffcc;
+    margin-left: 5px;
+}
+
+.autopilot-status {
+    display: flex;
+    align-items: center;
+    margin-top: 10px;
+    padding: 4px 0 0 0;
+    background: none;
+    border-radius: 0;
+}
+
+.autopilot-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: #ff3300;
+    margin-right: 8px;
+    transition: background-color 0.3s ease;
+}
+
+.autopilot-indicator.active {
+    background-color: #00ff66;
+    box-shadow: 0 0 10px #00ff66;
+    animation: autopilot-pulse 1.5s infinite alternate;
+}
+
+@keyframes autopilot-pulse {
+    from { box-shadow: 0 0 5px #00ff66; }
+    to { box-shadow: 0 0 15px #00ff66; }
+}
+
+.nav-key {
+    display: flex;
+    align-items: center;
+    margin-top: 5px;
+}
+
+.key-prompt {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    background: rgba(0, 150, 255, 0.3);
+    border: 1px solid rgba(0, 200, 255, 0.5);
+    border-radius: 3px;
+    text-align: center;
+    line-height: 16px;
+    margin-right: 8px;
+    font-size: 0.8em;
+    color: #fff;
+}
+
+/* Attitude indicator always centered in console */
+#attitudeCanvas {
+    display: block;
+    margin: 5px auto 0 auto;
+    border: 1px solid rgba(0, 200, 255, 0.3);
+    border-radius: 50%;
+    box-shadow: 0 0 15px rgba(0, 150, 255, 0.2);
+    max-width: 140px;
+    max-height: 140px;
+    width: 100%;
+    height: auto;
+}
+
+/* Mini-map and cargo always above console */
+#hud-mini-map {
+    position: absolute;
+    top: 45px;
+    right: 20px;
+    width: 220px;
+    height: 200px;
+    background: rgba(10, 30, 50, 0.65);
+    border: 1px solid rgba(0, 128, 255, 0.35);
+    border-radius: 6px;
+    box-shadow: 0 0 10px rgba(0, 150, 255, 0.2);
+    display: flex;
+    flex-direction: column;
+    color: rgba(0, 255, 255, 0.5);
+    padding: 5px;
+    z-index: 12;
+    overflow: hidden;
+}
+
+#hud-inventory {
+    position: absolute;
+    bottom: 235px;
+    right: 20px;
+    min-width: 190px;
+    padding: 10px 15px;
+    background: rgba(10, 30, 50, 0.65);
+    border: 1px solid rgba(0, 128, 255, 0.35);
+    border-radius: 6px;
+    box-shadow: 0 0 10px rgba(0, 150, 255, 0.2);
+    font-size: 0.85em;
+    color: rgba(0, 255, 255, 0.7);
+    text-align: center;
+    z-index: 12;
+}
+
+/* Mini-map styling */
+.mini-map-header {
+    font-size: 0.9em;
+    color: #00aacc;
+    text-align: center;
+    text-transform: uppercase;
+    border-bottom: 1px solid rgba(0, 150, 255, 0.3);
+    padding-bottom: 5px;
+    margin-bottom: 8px;
+}
+
+.mini-map-content {
+    justify-content: center;
+    flex-grow: 1;
+}
+
+.mini-map-data {
+    padding: 5px;
+}
+
+.mini-map-item {
+    color: rgba(0, 255, 255, 0.8);
+    font-size: 0.9em;
+    margin-bottom: 6px;
+}
+
+/* Cargo display */
+.cargo-status {
+    color: #0ff;
+    font-size: 0.95em;
+    text-align: center;
+    padding: 5px 0;
+}
+
+/* Style updates for the attitude indicator */
+#attitudeCanvas {
+    display: block;
+    margin: 5px auto 15px auto;
+    border: 1px solid rgba(0, 200, 255, 0.3);
+    border-radius: 50%;
+    box-shadow: 0 0 15px rgba(0, 150, 255, 0.2);
+}
+
+/* --- Central HUD Reticle --- */
+#hud-reticle {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(0, 255, 200, 0.7);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 10px rgba(0, 255, 200, 0.5);
+  pointer-events: none;
+  z-index: 2100; /* Above other HUD elements */
+}
+
+#hud-reticle::before, #hud-reticle::after {
+  content: '';
+  position: absolute;
+  background-color: rgba(0, 255, 200, 0.7);
+  box-shadow: 0 0 5px rgba(0, 255, 200, 0.5);
+}
+
+#hud-reticle::before {
+  width: 2px;
+  height: 12px;
+  left: 50%;
+  top: -14px;
+  transform: translateX(-50%);
+}
+
+#hud-reticle::after {
+  width: 12px;
+  height: 2px;
+  top: 50%;
+  left: -14px;
+  transform: translateY(-50%);
+}
+/* Small dot in the center */
+#hud-reticle > div {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 4px;
+    height: 4px;
+    background-color: rgba(0, 255, 200, 0.9);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* --- Starship HUD Cockpit Layout --- */
+#starship-hud {
+    font-family: 'Orbitron', 'Segoe UI', 'Arial', sans-serif;
+    color: #0ff;
+    text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+    pointer-events: none;
+    width: 100vw;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 2000;
+}
+
+/* Override the default styling for divs in the HUD */
+#starship-hud > div:not(#hud-reticle):not(#hud-mini-map):not(#hud-inventory):not(#attitudeCanvas):not(.cockpit-frame-bottom):not(.cockpit-frame-left):not(.cockpit-frame-right):not(.cockpit-console):not(.console-section) {
+    background: none;
+    box-shadow: none;
+    padding: 0;
+    margin: 0;
+}
+
+#starship-hud .hud-item {
+    padding: 3px 0px;
+    font-size: clamp(0.85rem, 1.1vw, 1.0rem);
+    margin-bottom: 4px;
+    white-space: nowrap;
+    background: none;
+    box-shadow: none;
+}
+
+#starship-hud .hud-label {
+    min-width: 60px;
+    margin-right: 10px;
+    text-transform: uppercase;
+    font-size: 0.9em;
+    background: none;
+    padding: 0;
+    box-shadow: none;
+    position: static;
+    transform: none;
+    text-align: left;
+    opacity: 0.8;
+}
+
+/* Common styling for HUD info blocks */
+.hud-info-block {
+    padding: 8px 12px;
+    background: rgba(10, 30, 50, 0.75);
+    border: 1px solid rgba(0, 128, 255, 0.35);
+    border-radius: 6px;
+    box-shadow: 0 0 10px rgba(0, 150, 255, 0.2);
+}
+
+/* Positioning for HUD info blocks */
+.hud-top-left {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+}
+
+.hud-bottom-left {
+    position: relative;
+    margin-top: 10px;
+    margin-bottom: 10px;
+    width: 100%;
+}
+
+.hud-bottom-center {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    margin: 10px 0;
+    width: 100%;
+}
+
+.hud-bottom-center .hud-item {
+    margin-right: 12px;
+}
+.hud-bottom-center .hud-item:last-child {
+    margin-right: 0;
+}
+
+/* Styling for value bars (Shields, Hull) */
+.hud-value-bar {
+    display: inline-block;
+    width: 80px;
+    height: 8px;
+    background-color: rgba(0, 80, 120, 0.5);
+    border: 1px solid rgba(0, 128, 255, 0.3);
+    border-radius: 2px;
+    margin-right: 5px;
+    vertical-align: middle;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Fill part of the value bar */
+.shield-bar-fill,
+.hull-bar-fill {
+    display: block;
+    height: 100%;
+    background-color: #00ffcc;
+    transition: width 0.3s ease-out;
+    border-radius: 1px;
+}
+
+.hull-bar-fill {
+    background-color: #ffaa00;
+}
+
+/* Attitude indicator */
+#starship-hud canvas#attitudeCanvas {
+    width: 160px;
+    height: 160px;
+    margin: 0 auto;
+    display: block;
+    background: rgba(10,20,30,0.4);
+    border-radius: 50%;
+    box-shadow: 0 0 24px 0 rgba(0,255,255,0.3), 0 0 0 1px rgba(0,255,255,0.4);
+    border: 1px solid rgba(0,255,255,0.25);
+}
+
+/* Mini-map Placeholder Styling */
+#hud-mini-map {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    width: 220px;
+    height: 180px;
+    background: rgba(10, 30, 50, 0.65);
+    border: 1px solid rgba(0, 128, 255, 0.35);
+    border-radius: 6px;
+    box-shadow: 0 0 10px rgba(0, 150, 255, 0.2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: rgba(0, 255, 255, 0.5);
+    padding: 5px;
+}
+
+#hud-mini-map::before {
+    content: 'MINI-MAP';
+    display: block;
+    width: 100%;
+    text-align: center;
+    font-size: 0.85em;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(0, 128, 255, 0.35);
+    margin-bottom: 5px;
+    color: #00aacc;
+}
+
+/* Inventory Placeholder Styling */
+#hud-inventory {
+    position: absolute;
+    bottom: 230px; /* Position above console */
+    right: 15px;
+    min-width: 180px;
+    padding: 8px 12px;
+    background: rgba(10, 30, 50, 0.65);
+    border: 1px solid rgba(0, 128, 255, 0.35);
+    border-radius: 6px;
+    box-shadow: 0 0 10px rgba(0, 150, 255, 0.2);
+    font-size: 0.85em;
+    color: rgba(0, 255, 255, 0.7);
+    text-align: center;
+}
+
+/* Autopilot and target indicators */
+.autopilot-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 10px;
+}
+
+.autopilot-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: #ff3300;
+    margin-right: 8px;
+    transition: background-color 0.3s ease;
+}
+
+.autopilot-indicator.active {
+    background-color: #00ff66;
+    box-shadow: 0 0 10px #00ff66;
+    animation: autopilot-pulse 1.5s infinite alternate;
+}
+
+@keyframes autopilot-pulse {
+    from { box-shadow: 0 0 5px #00ff66; }
+    to { box-shadow: 0 0 15px #00ff66; }
+}
+
+/* Target indicator that appears around selected targets */
+.target-indicator {
+    position: absolute;
+    border: 2px dashed rgba(255, 100, 0, 0.7);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 50;
+    box-shadow: 0 0 15px rgba(255, 100, 0, 0.3);
+    animation: target-pulse 2s infinite;
+}
+
+@keyframes target-pulse {
+    0% { border-color: rgba(255, 100, 0, 0.7); }
+    50% { border-color: rgba(255, 200, 0, 0.9); }
+    100% { border-color: rgba(255, 100, 0, 0.7); }
+}
+
+/* Status bars for systems panel */
+.status-bar {
+  width: 100%;
+  height: 10px;
+  background: rgba(0, 50, 100, 0.3);
+  border-radius: 3px;
+  margin-top: 3px;
+  border: 1px solid rgba(0, 128, 255, 0.2);
+  overflow: hidden;
+}
+
+.status-bar > div {
+  height: 100%;
+  background: linear-gradient(to right, #0088cc, #00aaff);
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+#system-shields, #system-hull, #system-power, #system-engines, 
+#system-ftl, #system-life-support, #system-sensors, #system-weapons,
+#nav-current-target, #nav-distance-to-target, #nav-bearing, #nav-tti {
+  color: #66ccff; /* Value color */
+  font-weight: 500;
+}
+
+/* HUD Enhancements */
+#starship-hud .hud-group {
+  margin-bottom: 10px;
+  padding: 5px;
+  background: rgba(10, 25, 45, 0.6); /* Slightly more defined background for groups */
+  border-radius: 5px;
+  border: 1px solid rgba(0, 128, 255, 0.2);
+}
+
+#starship-hud .hud-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 5px;
+  font-size: 0.95em; /* Slightly smaller for more info */
+}
+
+#starship-hud .hud-label {
+  color: #80c0ff; /* Softer label color */
+  margin-right: 8px;
+  text-shadow: none; /* Remove individual text shadow for labels if group has bg */
+  background: none;
+  padding: 0;
+  box-shadow: none;
+  position: static; /* Override absolute positioning */
+  transform: none; /* Override transform */
+  font-size: 0.9em;
+  text-align: left;
+}
+
+#starship-hud .hud-nav-info .hud-item {
+  font-size: 0.9em;
+}
+
+/* Top Status Bar */
+.top-status-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 30px;
+    background: rgba(10, 30, 50, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    padding: 0 15px;
+    border-bottom: 1px solid rgba(0, 150, 255, 0.3);
+    z-index: 15;
+}
+
+.status-item {
+    font-size: 0.85em;
+    color: #0ff;
+    letter-spacing: 0.05em;
+}
+
+.status-label {
+    color: rgba(0, 200, 255, 0.8);
+    margin-right: 5px;
+    font-weight: 500;
+}
+
+/* Cockpit Console Components */
+.system-status, .flight-stats, .target-info, .nav-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 5px;
+    width: 100%;
+}
+
+.thrust-indicators {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 5px;
+}
+
+.hud-value-bar {
+    background-color: rgba(0, 80, 120, 0.5);
+    height: 8px;
+    width: 70px;
+    border: 1px solid rgba(0, 128, 255, 0.3);
+    border-radius: 2px;
+    overflow: hidden;
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0 5px;
+}
+
+.shield-bar-fill, .hull-bar-fill {
+    height: 100%;
+    background-color: #00ffcc;
+    transition: width 0.3s ease-out;
+}
+
+.hull-bar-fill {
+    background-color: #ffaa00;
+}
+
+.power-value {
+    color: #00ffcc;
+    margin-left: 5px;
+}
+
+.autopilot-status {
+    display: flex;
+    align-items: center;
+    margin-top: 15px;
+    padding: 5px;
+    background: rgba(0, 50, 100, 0.3);
+    border-radius: 4px;
+}
+
+.autopilot-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: #ff3300;
+    margin-right: 8px;
+    transition: background-color 0.3s ease;
+}
+
+.autopilot-indicator.active {
+    background-color: #00ff66;
+    box-shadow: 0 0 10px #00ff66;
+    animation: autopilot-pulse 1.5s infinite alternate;
+}
+
+@keyframes autopilot-pulse {
+    from { box-shadow: 0 0 5px #00ff66; }
+    to { box-shadow: 0 0 15px #00ff66; }
+}
+
+.nav-key {
+    display: flex;
+    align-items: center;
+    margin-top: 5px;
+}
+
+.key-prompt {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    background: rgba(0, 150, 255, 0.3);
+    border: 1px solid rgba(0, 200, 255, 0.5);
+    border-radius: 3px;
+    text-align: center;
+    line-height: 16px;
+    margin-right: 8px;
+    font-size: 0.8em;
+    color: #fff;
+}
+
+/* Mini-map styling */
+.mini-map-header {
+    font-size: 0.9em;
+    color: #00aacc;
+    text-align: center;
+    text-transform: uppercase;
+    border-bottom: 1px solid rgba(0, 150, 255, 0.3);
+    padding-bottom: 5px;
+    margin-bottom: 8px;
+}
+
+.mini-map-content {
+    height: calc(100% - 30px);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.mini-map-data {
+    padding: 5px;
+}
+
+.mini-map-item {
+    color: rgba(0, 255, 255, 0.8);
+    font-size: 0.85em;
+    margin-bottom: 5px;
+}
+
+/* Cargo display */
+.cargo-status {
+    color: #0ff;
+    font-size: 0.9em;
+    text-align: center;
+    padding: 5px 0;
+}
+
+/* Style updates for the attitude indicator */
+#attitudeCanvas {
+    display: block;
+    margin: 5px auto 15px auto;
+    border: 1px solid rgba(0, 200, 255, 0.3);
+    border-radius: 50%;
+    box-shadow: 0 0 15px rgba(0, 150, 255, 0.2);
+} 
+/* Combat status styles */
+.combat-status {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 0, 0, 0.3);
+}
+
+.enemy-alert {
+    color: #ff3333;
+    font-weight: bold;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* Weapon reticle styles */
+#weapon-reticle {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60px;
+    height: 60px;
+    border: 2px solid rgba(255, 100, 0, 0.5);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 1100;
+}
+
+#weapon-reticle::before,
+#weapon-reticle::after {
+    content: "";
+    position: absolute;
+    background: rgba(255, 100, 0, 0.5);
+}
+
+#weapon-reticle::before {
+    width: 2px;
+    height: 20px;
+    left: 50%;
+    top: -10px;
+    transform: translateX(-50%);
+}
+
+#weapon-reticle::after {
+    width: 20px;
+    height: 2px;
+    top: 50%;
+    left: -10px;
+    transform: translateY(-50%);
+}
+
+/* Tactical Panel Styling */
+#tactical-panel {
+    font-family: 'Orbitron', monospace !important;
+    box-shadow: 0 0 20px rgba(0, 150, 255, 0.4), inset 0 0 10px rgba(0, 100, 150, 0.1);
+}
+
+/* 3D Mini-map container styling */
+.mini-map-3d-container {
+    font-family: 'Orbitron', monospace !important;
+    position: relative;
+}
+
+.mini-map-3d-container canvas {
+    border-radius: 4px;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Remove old mini-map styling since we're using tactical panel now */
+#hud-mini-map {
+    display: none !important;
+}
+
+/* Tactical panel navigation controls */
+.nav-controls {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(0, 150, 255, 0.2);
+}
+
+.nav-key {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+    font-size: 11px;
+}
+
+.key-prompt {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    background: rgba(0, 150, 255, 0.3);
+    border: 1px solid rgba(0, 200, 255, 0.5);
+    border-radius: 3px;
+    text-align: center;
+    line-height: 14px;
+    margin-right: 6px;
+    font-size: 10px;
+    color: #fff;
+    font-weight: bold;
+}
+
+/* Add styles for faction display at the end of the file */
+
+/* Faction Display Styles */
+.faction-standings {
+    margin-top: 20px;
+    padding: 10px;
+    border-top: 1px solid rgba(0, 255, 204, 0.3);
+}
+
+.faction-header {
+    font-size: 12px;
+    color: #00ffcc;
+    text-align: center;
+    margin-bottom: 10px;
+    letter-spacing: 2px;
+    opacity: 0.7;
+}
+
+.faction-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    font-size: 11px;
+}
+
+.faction-name {
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.faction-rank {
+    font-size: 10px;
+    text-transform: uppercase;
+}
+
+/* Starship Notification System - Unified Futuristic Style */
+.starship-notification {
+    font-family: 'Orbitron', monospace !important;
+}
+
+.notification-content {
+    position: relative;
+    padding: 16px 32px;
+    background: rgba(10, 25, 40, 0.85);
+    border: 1px solid rgba(0, 255, 204, 0.6);
+    border-radius: 0;
+    clip-path: polygon(
+        0 0,
+        calc(100% - 15px) 0,
+        100% 15px,
+        100% 100%,
+        15px 100%,
+        0 calc(100% - 15px)
+    );
+    overflow: hidden;
+}
+
+.notification-text {
+    position: relative;
+    z-index: 2;
+    color: #00ffcc;
+    text-shadow: 0 0 10px rgba(0, 255, 204, 0.8);
+    display: block;
+}
+
+.notification-border {
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(45deg, 
+        transparent 30%, 
+        rgba(0, 255, 204, 0.3) 50%, 
+        transparent 70%);
+    animation: border-scan 2s linear infinite;
+    z-index: 0;
+}
+
+.notification-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 150%;
+    height: 150%;
+    background: radial-gradient(circle, rgba(0, 255, 204, 0.2), transparent 70%);
+    z-index: -1;
+}
+
+/* Type-specific notification styles */
+.notification-damage .notification-content {
+    border-color: #ff3366;
+    background: rgba(40, 10, 15, 0.85);
+}
+
+.notification-damage .notification-text {
+    color: #ff6688;
+    text-shadow: 0 0 15px #ff3366;
+}
+
+.notification-damage .notification-border {
+    background: linear-gradient(45deg, 
+        transparent 30%, 
+        rgba(255, 51, 102, 0.4) 50%, 
+        transparent 70%);
+}
+
+.notification-damage .notification-glow {
+    background: radial-gradient(circle, rgba(255, 51, 102, 0.3), transparent 70%);
+}
+
+.notification-repair .notification-content {
+    border-color: #33ff66;
+    background: rgba(10, 40, 20, 0.85);
+}
+
+.notification-repair .notification-text {
+    color: #66ff99;
+    text-shadow: 0 0 15px #33ff66;
+}
+
+.notification-repair .notification-border {
+    background: linear-gradient(45deg, 
+        transparent 30%, 
+        rgba(51, 255, 102, 0.4) 50%, 
+        transparent 70%);
+}
+
+.notification-repair .notification-glow {
+    background: radial-gradient(circle, rgba(51, 255, 102, 0.3), transparent 70%);
+}
+
+.notification-warning .notification-content {
+    border-color: #ffaa33;
+    background: rgba(40, 30, 10, 0.85);
+}
+
+.notification-warning .notification-text {
+    color: #ffbb66;
+    text-shadow: 0 0 15px #ffaa33;
+}
+
+.notification-warning .notification-border {
+    background: linear-gradient(45deg, 
+        transparent 30%, 
+        rgba(255, 170, 51, 0.4) 50%, 
+        transparent 70%);
+}
+
+.notification-warning .notification-glow {
+    background: radial-gradient(circle, rgba(255, 170, 51, 0.3), transparent 70%);
+}
+
+.notification-autopilot .notification-content {
+    border-color: #33ccff;
+    background: rgba(10, 30, 45, 0.85);
+}
+
+.notification-autopilot .notification-text {
+    color: #66ddff;
+    text-shadow: 0 0 15px #33ccff;
+}
+
+.notification-autopilot .notification-border {
+    background: linear-gradient(45deg, 
+        transparent 30%, 
+        rgba(51, 204, 255, 0.4) 50%, 
+        transparent 70%);
+}
+
+.notification-autopilot .notification-glow {
+    background: radial-gradient(circle, rgba(51, 204, 255, 0.3), transparent 70%);
+}
+
+/* Notification animations */
+@keyframes notification-appear {
+    0% {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px) scale(0.8);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0) scale(1);
+    }
+}
+
+@keyframes notification-disappear {
+    0% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-20px) scale(0.9);
+    }
+}
+
+@keyframes border-scan {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+/* Extra effects for critical notifications */
+.notification-damage .notification-content::before {
+    content: '⚠ WARNING ⚠';
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.6em;
+    letter-spacing: 3px;
+    color: #ff3366;
+    opacity: 0.8;
+    animation: blink 0.8s ease-in-out infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 0.8; }
+    50% { opacity: 0.3; }
+}
+
+/* Add scanline effect to all notifications */
+.notification-content::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, 
+        transparent 0%, 
+        currentColor 50%, 
+        transparent 100%);
+    opacity: 0.3;
+    animation: scanline 3s linear infinite;
+}
+
+@keyframes scanline {
+    0% {
+        transform: translateY(0);
+    }
+    100% {
+        transform: translateY(60px);
+    }
+}

@@ -1,0 +1,2399 @@
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// Scene setup
+const scene = new THREE.Scene();
+
+// Camera setup
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000000);
+camera.position.set(0, 800, 2000);
+
+// Renderer setup with optimized settings for better lighting
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.physicallyCorrectLights = true; 
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.3; // Higher exposure for better visibility of distant objects
+renderer.outputEncoding = THREE.sRGBEncoding; // Ensures colors appear correct
+document.body.appendChild(renderer.domElement);
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.3); // Increased for better base illumination
+scene.add(ambientLight);
+
+// Main sun directional light
+const sunLight = new THREE.DirectionalLight(0xffffff, 8);
+sunLight.position.set(0, 0, 0);
+sunLight.distance = 0;
+scene.add(sunLight);
+
+// Strong point light at the Sun's position to better illuminate all planets
+const sunPointLight = new THREE.PointLight(0xffffff, 5, 0, 0.5); // No distance attenuation
+sunPointLight.position.set(0, 0, 0);
+scene.add(sunPointLight);
+
+// OrbitControls
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.minDistance = 0.1; // Allow much closer zoom for small bodies
+controls.maxDistance = 1000000;
+
+// Track relative camera position to focused planet
+let cameraRelativePosition = new THREE.Vector3();
+let lastPlanetPosition = new THREE.Vector3();
+
+// UI visibility settings
+const uiSettings = {
+    showOrbitLines: true,
+    showLabels: true,
+    showTelemetry: false,
+    realisticRotation: true // Enable astronomically accurate axial rotation
+};
+
+// --- Simulation settings ---
+const simSettings = {
+    // Define preset time scales as an array of {label, daysPerSecond} objects
+    timePresets: [
+        { label: "Realtime: 1 day = 24h", daysPerSecond: 1/86400 },
+        { label: "1 day = 1 hour", daysPerSecond: 1/3600 },
+        { label: "1 day = 10 min", daysPerSecond: 1/600 },
+        { label: "1 day = 1 min", daysPerSecond: 1/60 },
+        { label: "1 day = 10 sec", daysPerSecond: 1/10 },
+        { label: "1 day = 1 sec", daysPerSecond: 1 },
+        { label: "1 week = 1 sec", daysPerSecond: 7 },
+        { label: "1 month = 1 sec", daysPerSecond: 30 },
+        { label: "1 year = 10 sec", daysPerSecond: 365.25/10 }
+    ],
+    currentPresetIndex: 0,
+    get timeScale() {
+        return this.timePresets[this.currentPresetIndex].daysPerSecond / REALTIME_DAYS_PER_SECOND;
+    }
+};
+
+// For realtime, 1 day = 24*60*60 = 86400 seconds. So, 1/86400 days per second.
+const REALTIME_DAYS_PER_SECOND = 1/86400;
+const simulationSpeedFactor = REALTIME_DAYS_PER_SECOND; // Realtime by default
+
+let simulationDaysElapsed = 0;
+let simulationStartTimestamp = Date.now();
+let lastFocusChangeTimestamp = Date.now();
+
+// --- Real-world orbital drift constants ---
+const MOON_RECESSION_KM_PER_YEAR = 0.000038; // 3.8 cm/year in km
+const MOON_ORBITAL_PERIOD_INCREASE_PER_YEAR = 0.0000000002; // ~2.3 ms/year (fractional)
+const MERCURY_PRECESSION_DEG_PER_CENTURY = 0.01194; // 43 arcsec/century
+
+// Label container for all celestial body labels
+const labelsContainer = new THREE.Object3D();
+labelsContainer.name = "labelsContainer";
+scene.add(labelsContainer);
+
+// Texture loader
+const textureLoader = new THREE.TextureLoader();
+// Add a clock for more stable animation timing
+const clock = new THREE.Clock();
+
+// Astronomical Unit in kilometers
+const AU = 149.6e6; // km
+
+// Scale factors for visualization
+const DISTANCE_SCALE = 1 / 2e5; // Scales AU down: 1 AU = 1 / 2e5 scene units (approx 750 scene units)
+const RADIUS_SCALE = 1 / 1000;  // Scales km down: 1000 km = 1 scene unit
+const MOON_DISTANCE_SCALE = 1 / 5e3; // Special scale for moons to ensure they orbit outside their planets
+const DAY = 24 * 60 * 60; // Number of seconds in a day
+
+// Saturn rings rotation rate - one Keplerian day at middle of rings
+const SATURN_RINGS_ROTATION_PERIOD = 0.45; // In Earth days, based on Keplerian rotation at ~100,000 km
+
+// Texture map for available textures (highest quality preferred)
+const TEXTURES = {
+    Sun: ["../textures/8k_sun.jpg", "../textures/2k_sun.jpg"],
+    Mercury: ["../textures/2k_mercury.jpg"],
+    Venus: ["../textures/8k_venus_surface.jpg", "../textures/2k_venus_surface.jpg"],
+    VenusAtmosphere: ["../textures/4k_venus_atmosphere.jpg", "../textures/2k_venus_atmosphere.jpg"],
+    EarthDay: ["../textures/8k_earth_daymap.jpg", "../textures/2k_earth_daymap.jpg"],
+    EarthNight: ["../textures/8k_earth_nightmap.jpg", "../textures/2k_earth_nightmap.jpg"],
+    EarthClouds: ["../textures/8k_earth_clouds.jpg", "../textures/2k_earth_clouds.jpg"],
+    Moon: ["../textures/2k_moon.jpg"],
+    Mars: ["../textures/8k_mars.jpg", "../textures/2k_mars.jpg"],
+    Jupiter: ["../textures/8k_jupiter.jpg", "../textures/2k_jupiter.jpg"],
+    Saturn: ["../textures/8k_saturn.jpg", "../textures/2k_saturn.jpg"],
+    SaturnRings: ["../textures/8k_saturn_ring_alpha.png", "../textures/2k_saturn_ring_alpha.png"],
+    // Ensure Uranus texture uses a standard texture format
+    Uranus: ["../textures/2k_uranus.jpg", "../textures/uranus.jpg"], 
+    Neptune: ["../textures/2k_neptune.jpg"],
+    // Mars moon textures - more accurate than generic
+    Phobos: ["../textures/Phobos.png"], // Use provided Phobos.png
+    Deimos: ["../textures/Deimos.jpg"], // Use provided Deimos.jpg
+    PhobosTopography: ["../textures/PhobosTopography.png"],
+    DeimosTopography: ["../textures/DeimosTopography.jpg"],
+    // Jupiter moon textures - higher quality
+    Io: ["../textures/Io.png"],
+    Europa: ["../textures/Europa.png"],
+    Ganymede: ["../textures/ganymede.jpg"],
+    Callisto: ["../textures/Callisto.png"],
+    // Dwarf planets (fictional)
+    Pluto: ["../textures/pluto.jpg"],
+    Eris: ["../textures/4k_eris_fictional.jpg", "../textures/2k_eris_fictional.jpg"],
+    Makemake: ["../textures/4k_makemake_fictional.jpg", "../textures/2k_makemake_fictional.jpg"],
+    Haumea: ["../textures/4k_haumea_fictional.jpg", "../textures/2k_haumea_fictional.jpg"],
+    Ceres: ["../textures/4k_ceres_fictional.jpg", "../textures/2k_ceres_fictional.jpg"],
+    // Generic moon texture fallback
+    GenericMoon: ["../textures/2k_moon.jpg"]
+};
+
+// Helper to get the first available texture from a list
+function getTexture(paths) {
+    // Check if paths exists and has length
+    if (paths && paths.length > 0) {
+        return paths[0]; // Return the first path
+    }
+    console.warn("No texture paths provided!");
+    return "../textures/2k_moon.jpg"; // Fallback texture
+}
+
+// Only include objects with available textures
+let solarSystemPlanetsAndSunData = [
+    {
+        name: "Sun",
+        radius: 695700,
+        textureUrl: getTexture(TEXTURES.Sun),
+        rotationPeriod: 25.05,
+        axialTilt: 7.25,
+        isStar: true
+    },
+    {
+        name: "Mercury",
+        radius: 2439.7,
+        textureUrl: getTexture(TEXTURES.Mercury),
+        orbitalProperties: {
+            semiMajorAxis: 0.387098 * AU,
+            eccentricity: 0.205630,
+            inclination: 7.005,
+            longitudeOfAscendingNode: 48.331,
+            argumentOfPerihelion: 29.124,
+            period: 87.969,
+        },
+        rotationPeriod: 58.646,
+        axialTilt: 0.01,
+        isStar: false
+    },
+    {
+        name: "Venus",
+        radius: 6051.8,
+        textureUrl: getTexture(TEXTURES.Venus),
+        orbitalProperties: {
+            semiMajorAxis: 0.723332 * AU,
+            eccentricity: 0.006772,
+            inclination: 3.394,
+            longitudeOfAscendingNode: 76.680,
+            argumentOfPerihelion: 54.884,
+            period: 224.698,
+        },
+        rotationPeriod: -243.025, // Retrograde rotation
+        axialTilt: 177.36, // Almost retrograde
+        isStar: false
+    },
+    {
+        name: "Earth",
+        radius: 6371,
+        textureUrl: getTexture(TEXTURES.EarthDay),
+        orbitalProperties: {
+            semiMajorAxis: 1.0 * AU, // 1 AU
+            eccentricity: 0.0167086,
+            inclination: 0.00005, // Reference plane
+            longitudeOfAscendingNode: -11.26064,
+            argumentOfPerihelion: 114.20783,
+            period: 365.256, // Earth days
+        },
+        rotationPeriod: 0.99726968, // Approximately 24 hours
+        axialTilt: 23.44, // ~23.5°
+        isStar: false
+    },
+    {
+        name: "Mars",
+        radius: 3389.5,
+        textureUrl: getTexture(TEXTURES.Mars),
+        orbitalProperties: {
+            semiMajorAxis: 1.523679 * AU,
+            eccentricity: 0.0934,
+            inclination: 1.850,
+            longitudeOfAscendingNode: 49.558,
+            argumentOfPerihelion: 286.502,
+            period: 686.98,
+        },
+        rotationPeriod: 1.025957, // Just over an Earth day
+        axialTilt: 25.19,
+        isStar: false
+    },
+    {
+        name: "Jupiter",
+        radius: 69911,
+        textureUrl: getTexture(TEXTURES.Jupiter),
+        orbitalProperties: {
+            semiMajorAxis: 5.2044 * AU,
+            eccentricity: 0.0489,
+            inclination: 1.303,
+            longitudeOfAscendingNode: 100.464,
+            argumentOfPerihelion: 273.867,
+            period: 4332.59,
+        },
+        rotationPeriod: 0.41354, // About 9.9 hours
+        axialTilt: 3.13,
+        isStar: false
+    },
+    {
+        name: "Saturn",
+        radius: 58232,
+        textureUrl: getTexture(TEXTURES.Saturn),
+        orbitalProperties: {
+            semiMajorAxis: 9.5826 * AU,
+            eccentricity: 0.0565,
+            inclination: 2.485,
+            longitudeOfAscendingNode: 113.665,
+            argumentOfPerihelion: 339.392,
+            period: 10759.22,
+        },
+        rotationPeriod: 0.444, // About 10.7 hours
+        axialTilt: 26.73,
+        isStar: false
+    },
+    {
+        name: "Uranus",
+        radius: 25362,
+        textureUrl: getTexture(TEXTURES.Uranus),
+        orbitalProperties: {
+            semiMajorAxis: 19.19126 * AU,
+            eccentricity: 0.046381,
+            inclination: 0.770,
+            longitudeOfAscendingNode: 74.006,
+            argumentOfPerihelion: 96.998857,
+            period: 30688.5,
+        },
+        rotationPeriod: -0.71833,
+        axialTilt: 97.77,
+        isStar: false
+    },
+    {
+        name: "Neptune",
+        radius: 24622,
+        textureUrl: getTexture(TEXTURES.Neptune),
+        orbitalProperties: {
+            semiMajorAxis: 30.11 * AU,
+            eccentricity: 0.008997,
+            inclination: 1.770,
+            longitudeOfAscendingNode: 131.783,
+            argumentOfPerihelion: 276.336,
+            period: 60182,
+        },
+        rotationPeriod: 0.6713,
+        axialTilt: 28.32,
+        isStar: false
+    },
+    {
+        name: "Pluto",
+        radius: 1188.3, // Radius in km
+        textureUrl: getTexture(TEXTURES.Pluto),
+        orbitalProperties: {
+            semiMajorAxis: 39.482 * AU, // Semi-major axis in km (39.482 AU)
+            eccentricity: 0.2488, // Highly eccentric orbit
+            inclination: 17.16, // Orbital inclination in degrees
+            longitudeOfAscendingNode: 110.299, // In degrees
+            argumentOfPerihelion: 113.834, // In degrees 
+            period: 90560, // Orbital period in Earth days (248 years)
+        },
+        rotationPeriod: 6.387, // Rotation period in Earth days (retrograde)
+        axialTilt: 122.53, // Severe axial tilt
+        isStar: false
+    }
+    // Dwarf planets can be added here if desired
+];
+
+const allMoonsData = [ // Renamed to avoid conflict
+    {
+        name: "Moon",
+        orbitsAround: "Earth",
+        radius: 1737.4, // km
+        textureUrl: getTexture(TEXTURES.Moon),
+        orbitalProperties: {
+            semiMajorAxis: 384399, // km (relative to Earth)
+            eccentricity: 0.0549,
+            inclination: 5.145, // degrees (to Earth's orbit around Sun)
+            longitudeOfAscendingNode: 125.08, // degrees (approx, rapidly precessing) - relative to ecliptic
+            argumentOfPerihelion: 318.15, // degrees (approx, rapidly precessing) - relative to ecliptic
+            period: 27.321661, // Earth days (sidereal orbit period)
+        },
+        rotationPeriod: 27.321661, // Earth days (synchronous rotation)
+        axialTilt: 6.68, // degrees (to its own orbital plane around Earth)
+        isStar: false,
+        isMoon: true // Flag to identify moons for special distance scaling
+    },
+    {
+        name: "Phobos",
+        orbitsAround: "Mars",
+        radius: 11.2667, // km (mean radius)
+        textureUrl: getTexture(TEXTURES.Phobos), // Using dedicated Phobos texture
+        orbitalProperties: {
+            semiMajorAxis: 9376, // km (from Mars center)
+            eccentricity: 0.0151,
+            inclination: 1.075, // degrees (to Mars' equator)
+            longitudeOfAscendingNode: 47, // degrees (approx relative to Mars orbit)
+            argumentOfPerihelion: 240, // degrees (approx relative to Mars orbit)
+            period: 0.31891023, // Earth days
+        },
+        rotationPeriod: 0.31891023, // Synchronous
+        axialTilt: 0, 
+        isStar: false,
+        isMoon: true,
+        description: "Phobos is the larger and inner of Mars' two moons and is gradually spiraling inward due to tidal forces. It's heavily cratered with its most prominent feature being the Stickney crater."
+    },
+    {
+        name: "Deimos",
+        orbitsAround: "Mars",
+        radius: 6.2, // km (mean radius)
+        textureUrl: getTexture(TEXTURES.Deimos), // Using dedicated Deimos texture
+        orbitalProperties: {
+            semiMajorAxis: 23463.2, // km (from Mars center)
+            eccentricity: 0.00033,
+            inclination: 0.93, // degrees (to Mars' equator)
+            longitudeOfAscendingNode: 70, // approx
+            argumentOfPerihelion: 280, // approx
+            period: 1.26244, // Earth days
+        },
+        rotationPeriod: 1.26244, // Synchronous
+        axialTilt: 0,
+        isStar: false,
+        isMoon: true,
+        description: "Deimos is the smaller and outer of Mars' two moons with a smooth surface covered by fine-grained regolith. Its surface has fewer craters compared to Phobos, but shows evidence of impact reshaping."
+    },
+    {
+        name: "Io",
+        orbitsAround: "Jupiter",
+        radius: 1821.6, // km
+        textureUrl: getTexture(TEXTURES.Io), // Using dedicated Io texture
+        orbitalProperties: {
+            semiMajorAxis: 421700, // km
+            eccentricity: 0.0041,
+            inclination: 0.050, // degrees (to Jupiter's equator)
+            longitudeOfAscendingNode: 43.977, 
+            argumentOfPerihelion: 84.129,  
+            period: 1.769137786, // Earth days
+        },
+        rotationPeriod: 1.769137786, // Synchronous
+        axialTilt: 0, 
+        isStar: false,
+        isMoon: true,
+        description: "Io is the most volcanically active body in the solar system, with hundreds of continuously erupting volcanoes. Its surface is covered with sulfur compounds giving it its distinctive yellow-orange-red appearance."
+    },
+    {
+        name: "Europa",
+        orbitsAround: "Jupiter",
+        radius: 1560.8, // km
+        textureUrl: getTexture(TEXTURES.Europa), // Using dedicated Europa texture
+        orbitalProperties: {
+            semiMajorAxis: 671034, // km
+            eccentricity: 0.0094,
+            inclination: 0.471, // degrees (to Jupiter's equator)
+            longitudeOfAscendingNode: 219.106, 
+            argumentOfPerihelion: 88.970,   
+            period: 3.551181, // Earth days
+        },
+        rotationPeriod: 3.551181, // Synchronous
+        axialTilt: 0.1, // degrees
+        isStar: false,
+        isMoon: true,
+        description: "Europa has a smooth icy surface crisscrossed with cracks and ridges. It has a subsurface ocean beneath its icy crust, making it one of the solar system's best candidates for potentially harboring life."
+    },
+    {
+        name: "Ganymede",
+        orbitsAround: "Jupiter",
+        radius: 2634.1, // km
+        textureUrl: getTexture(TEXTURES.Ganymede), // Using dedicated Ganymede texture
+        orbitalProperties: {
+            semiMajorAxis: 1070412, // km
+            eccentricity: 0.0013,
+            inclination: 0.204, // degrees (to Jupiter's equator)
+            longitudeOfAscendingNode: 63.552, 
+            argumentOfPerihelion: 192.417,   
+            period: 7.15455296, // Earth days
+        },
+        rotationPeriod: 7.15455296, // Synchronous
+        axialTilt: 0.33, // degrees
+        isStar: false,
+        isMoon: true,
+        description: "Ganymede is the largest moon in the solar system, even larger than Mercury. It's the only moon with its own magnetic field and features a complex surface with dark, heavily cratered regions and lighter grooved terrain."
+    },
+    {
+        name: "Callisto",
+        orbitsAround: "Jupiter",
+        radius: 2410.3, // km
+        textureUrl: getTexture(TEXTURES.Callisto), // Using dedicated Callisto texture
+        orbitalProperties: {
+            semiMajorAxis: 1882709, // km
+            eccentricity: 0.0074,
+            inclination: 0.192, // degrees (to Jupiter's equator)
+            longitudeOfAscendingNode: 298.848, 
+            argumentOfPerihelion: 52.643,   
+            period: 16.6890184, // Earth days
+        },
+        rotationPeriod: 16.6890184, // Synchronous
+        axialTilt: 0, 
+        isStar: false,
+        isMoon: true,
+        description: "Callisto has the most heavily cratered surface in the solar system, showing no signs of recent geological activity. Despite its appearance, it may have a subsurface ocean and is relatively non-threatening radiation environment compared to other Jovian moons."
+    }
+];
+
+// This will hold the final, ordered list of all celestial bodies
+const solarSystemData = []; 
+
+// Combine planets and moons into solarSystemData, inserting moons after their parent
+// Start with planets and the Sun
+solarSystemPlanetsAndSunData.forEach(planetOrSun => {
+    solarSystemData.push(planetOrSun);
+    // Find and insert moons for this planet/sun
+    allMoonsData.forEach(moon => {
+        if (moon.orbitsAround === planetOrSun.name) {
+            solarSystemData.push(moon);
+        }
+    });
+});
+
+
+const celestialObjects = []; // To store created Three.js objects and their data
+
+/**
+ * Solves Kepler's equation M = E - e * sin(E) for E (Eccentric Anomaly).
+ * Uses Newton's method.
+ * @param {number} M - Mean Anomaly (radians).
+ * @param {number} e - Eccentricity.
+ * @param {number} [maxIter=100] - Maximum iterations.
+ * @param {number} [tolerance=1e-7] - Desired precision for E.
+ * @returns {number} Eccentric Anomaly E (radians).
+ */
+function solveKeplerEquation(M, e, maxIter = 100, tolerance = 1e-7) {
+    let E = M; 
+    if (e > 0.8) { 
+        E = M + e * Math.sin(M) / (1 - Math.sin(M+e) + Math.sin(M)); 
+        if (isNaN(E) || !isFinite(E)) E = M + (e > 0 ? e : -e); // Robust fallback
+    } else {
+       E = M + e * Math.sin(M); 
+    }
+
+    for (let i = 0; i < maxIter; i++) {
+        const f_E = E - e * Math.sin(E) - M; 
+        const f_prime_E = 1 - e * Math.cos(E); 
+        if (Math.abs(f_prime_E) < 1e-10) { // Avoid division by zero or very small number
+            // console.warn(`Kepler solver: f_prime_E is too small for M=${M}, e=${e}. Returning current E=${E}`);
+            return E; // Or handle error appropriately
+        }
+        const deltaE = f_E / f_prime_E;
+        E -= deltaE;
+        if (Math.abs(deltaE) < tolerance) {
+            return E;
+        }
+    }
+    // console.warn(`Kepler's equation did not converge for M=${M}, e=${e} after ${maxIter} iterations. Last E=${E}`);
+    return E;
+}
+
+/**
+ * Calculates a series of points for an elliptical orbit.
+ * @param {object} orbitalProperties - The orbital parameters of the body.
+ * @param {string} objectName - Name of the object for logging.
+ * @param {number} numPoints - Number of points to calculate for the ellipse.
+ * @param {boolean} isMoon - Whether this is a moon orbit (uses different scale)
+ * @returns {THREE.Line | null} A Line object representing the orbit, or null.
+ */
+function calculateOrbitPoints(orbitalProperties, objectName, numPoints = 200, isMoon = false) { // Reduced points for performance
+    if (!orbitalProperties) return null;
+
+    const { semiMajorAxis: a_km, eccentricity: e, argumentOfPerihelion: omega_deg } = orbitalProperties;
+    // Use moon-specific scale for moons to ensure they orbit outside their planets
+    const a = a_km * (isMoon ? MOON_DISTANCE_SCALE : DISTANCE_SCALE);
+    if (a === 0) {
+        return null;
+    }
+
+    const points = [];
+    const omega_rad = THREE.MathUtils.degToRad(omega_deg || 0);
+
+    for (let i = 0; i <= numPoints; i++) {
+        const M_loop = (i / numPoints) * 2 * Math.PI; 
+        const E_loop = solveKeplerEquation(M_loop, e);     
+        const nu_loop = 2 * Math.atan2(Math.sqrt(1 + e) * Math.sin(E_loop / 2), Math.sqrt(1 - e) * Math.cos(E_loop / 2)); 
+        const r_loop = a * (1 - e * Math.cos(E_loop)); 
+
+        const x_op = r_loop * Math.cos(nu_loop + omega_rad);
+        const y_op = r_loop * Math.sin(nu_loop + omega_rad);
+        
+        points.push(new THREE.Vector3(x_op, 0, -y_op)); 
+    }
+
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineBasicMaterial({ color: 0x666666, transparent: true, opacity: 0.5 }); // Darker, more transparent
+    const line = new THREE.Line(geometry, material);
+    line.name = objectName + "_orbitLine";
+    return line;
+}
+
+// Helper to load high-quality textures with best filtering
+function loadTextureHQ(path) {
+    const tex = textureLoader.load(path);
+    tex.minFilter = THREE.LinearMipMapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    return tex;
+}
+
+/**
+ * Creates a celestial body (star, planet, or moon) with texture and adds it to the scene.
+ * @param {object} data - The properties of the celestial body.
+ */
+function createCelestialBody(data) {
+    const scaledRadius = Math.max(0.1, data.radius * RADIUS_SCALE);
+    // Higher segment counts for smoothness
+    let widthSegments = 64, heightSegments = 32;
+    if (data.isStar) {
+        widthSegments = 128;
+        heightSegments = 64;
+    }
+    const geometry = new THREE.SphereGeometry(scaledRadius, widthSegments, heightSegments);
+    
+    let material;
+    if (data.isStar) {
+        // Sun uses emissive material to glow and light up the scene
+        const sunTexture = loadTextureHQ(getTexture(["../textures/8k_sun.jpg", "../textures/2k_sun.jpg"]));
+        material = new THREE.MeshBasicMaterial({
+            map: sunTexture,
+            emissive: 0xffaa33,
+            emissiveIntensity: 0.5
+        });
+        
+        // Position lights at the Sun's location 
+        sunLight.position.set(0, 0, 0);
+        sunPointLight.position.set(0, 0, 0);
+    } else {
+        // Planets use StandardMaterial with optimized settings for better lighting reception
+        const planetTexture = loadTextureHQ(data.textureUrl);
+        
+        // Special case for Uranus - use StandardMaterial which renders better than Basic
+        if (data.name === "Uranus") {
+            console.log(`Creating Uranus with texture: ${data.textureUrl}`);
+            material = new THREE.MeshStandardMaterial({
+                map: planetTexture,
+                metalness: 0.1,
+                roughness: 0.8,
+                color: 0x8CFFFF // Light cyan color to enhance visibility
+            });
+        } else {
+            // Standard material for other planets
+            // Distance-based material adjustments
+            const isOuterPlanet = data.orbitalProperties && data.orbitalProperties.semiMajorAxis > 5 * AU;
+            
+            material = new THREE.MeshStandardMaterial({
+                map: planetTexture,
+                metalness: 0.0,
+                roughness: isOuterPlanet ? 0.7 : 0.8, // Lower roughness for outer planets to increase reflectivity
+                envMapIntensity: isOuterPlanet ? 0.5 : 0.3 // Increase environment reflectivity for outer planets
+            });
+        }
+    }
+
+    const bodyObject = new THREE.Mesh(geometry, material);
+    bodyObject.name = data.name + "_mesh";
+    // bodyObject.castShadow = !data.isStar;
+    // bodyObject.receiveShadow = !data.isStar;
+    
+    bodyObject.rotation.x = THREE.MathUtils.degToRad(data.axialTilt || 0); 
+     if (data.name === "Uranus") { 
+        bodyObject.rotation.z = THREE.MathUtils.degToRad(data.axialTilt || 0); 
+        bodyObject.rotation.x = 0; 
+    }
+
+    const orbitPivot = new THREE.Object3D(); 
+    orbitPivot.name = data.name + "_orbitPivot";
+    orbitPivot.add(bodyObject); 
+
+    let parentThreeJSObject = scene; 
+    let lineParentThreeJSObject = scene;
+
+    if (data.orbitsAround) {
+        const parentEntityArr = celestialObjects.filter(obj => obj.name === data.orbitsAround);
+        if (parentEntityArr.length > 0) {
+            const parentEntity = parentEntityArr[0]; // get the first match
+            parentThreeJSObject = parentEntity.bodyObject; 
+            lineParentThreeJSObject = parentEntity.bodyObject; 
+        } else {
+            console.warn(`Parent object ${data.orbitsAround} not found for ${data.name}. Defaulting to main scene.`);
+        }
+    }
+    
+    parentThreeJSObject.add(orbitPivot);
+    let createdOrbitLine = null; // Declare here to be accessible for the celestialObjects push
+
+    if (data.orbitalProperties) {
+        const { 
+            semiMajorAxis: a_km, 
+            eccentricity: e, 
+            inclination: i_deg, 
+            longitudeOfAscendingNode: Omega_deg, 
+            argumentOfPerihelion: omega_deg,
+            period: orbitalPeriodDays 
+        } = data.orbitalProperties;
+
+        // ---- Accurate moon-orbit separation adjustment ----
+        // Base scene-scaled semi-major axis
+        const baseScaledA = a_km * (data.isMoon ? MOON_DISTANCE_SCALE : DISTANCE_SCALE);
+
+        // Determine a visual scaling factor so the *periapsis* (closest approach)
+        // never intersects the parent body while still preserving true orbital
+        // shape.  We guarantee at least 30 % of the parent-radius clearance.
+        let visualOrbitFactor = 1;
+        if (data.isMoon && data.orbitsAround) {
+            const parentEntity = celestialObjects.find(o => o.name === data.orbitsAround && o.bodyObject);
+            if (parentEntity) {
+                const parentScaledRadius = parentEntity.bodyObject.geometry.parameters.radius * parentEntity.bodyObject.scale.x;
+                const minSeparation = parentScaledRadius * 0.3; // 30 % clearance
+                const requiredPericenter = parentScaledRadius + minSeparation;
+                const currentPericenter = baseScaledA * (1 - e);
+                if (currentPericenter < requiredPericenter) {
+                    visualOrbitFactor = requiredPericenter / currentPericenter;
+                }
+            }
+        }
+
+        // Final semi-major axis used for initial placement (animate() will apply
+        // the same factor each frame).
+        const a = baseScaledA * visualOrbitFactor;
+
+        const M0 = Math.random() * 2 * Math.PI; 
+        const E0 = solveKeplerEquation(M0, e);
+        const nu0 = 2 * Math.atan2(Math.sqrt(1 + e) * Math.sin(E0 / 2), Math.sqrt(1 - e) * Math.cos(E0 / 2));
+        const r0 = a * (1 - e * Math.cos(E0));
+
+        const x_orb_plane = r0 * Math.cos(nu0 + THREE.MathUtils.degToRad(omega_deg || 0));
+        const z_orb_plane = r0 * Math.sin(nu0 + THREE.MathUtils.degToRad(omega_deg || 0));
+        
+        bodyObject.position.set(x_orb_plane, 0, -z_orb_plane); 
+
+        orbitPivot.rotation.y = THREE.MathUtils.degToRad(Omega_deg || 0); 
+        orbitPivot.rotateOnWorldAxis(new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0), orbitPivot.rotation.y), THREE.MathUtils.degToRad(i_deg || 0));
+
+        data.currentMeanAnomaly = M0;
+        data.orbitalPeriodDays = orbitalPeriodDays;
+
+        createdOrbitLine = calculateOrbitPoints(data.orbitalProperties, data.name, 200, data.isMoon); // Pass isMoon flag
+        let linePivot = null;
+        if (createdOrbitLine) {
+            linePivot = new THREE.Object3D();
+            linePivot.name = data.name + "_linePivot";
+            linePivot.add(createdOrbitLine);
+            linePivot.rotation.copy(orbitPivot.rotation);
+            // Ensure orbit visual matches any separation scaling applied to moons
+            if (data.isMoon && visualOrbitFactor !== 1) {
+                linePivot.scale.set(visualOrbitFactor, 1, visualOrbitFactor);
+            }
+            lineParentThreeJSObject.add(linePivot); 
+            
+            // Set initial visibility based on UI settings
+            createdOrbitLine.visible = uiSettings.showOrbitLines;
+        }
+        
+        // Saturn rings handled by the texture option system now
+
+        celestialObjects.push({
+            name: data.name,
+            bodyObject: bodyObject, 
+            orbitPivot: orbitPivot,   
+            linePivot: linePivot,     // Store the linePivot which contains createdOrbitLine
+            orbitalProperties: data.orbitalProperties,
+            rotationPeriod: data.rotationPeriod,
+            currentMeanAnomaly: data.currentMeanAnomaly,
+            orbitalPeriodDays: data.orbitalPeriodDays,
+            isStar: !!data.isStar,
+            isMoon: !!data.isMoon,
+            orbitsAround: data.orbitsAround || null,
+            planetLight: null,  // Stars don't need their own hemisphere light
+            visualOrbitFactor // Persist for animate() frame updates
+        });
+
+    } else if (data.isStar) { 
+        parentThreeJSObject.remove(orbitPivot); 
+        parentThreeJSObject.add(bodyObject);    
+        
+        celestialObjects.push({
+            name: data.name,
+            bodyObject: bodyObject,
+            orbitPivot: null, 
+            linePivot: null,  
+            orbitalProperties: null,
+            rotationPeriod: data.rotationPeriod,
+            currentMeanAnomaly: 0,
+            orbitalPeriodDays: null,
+            isStar: true,
+            isMoon: false,
+            orbitsAround: null,
+            planetLight: null  // Stars don't need their own hemisphere light
+        });
+    }
+
+    // Create a planetLight for large planets and moons
+    let planetLight = null;
+    if (!data.isStar && data.orbitalProperties) {
+        const distance = data.orbitalProperties.semiMajorAxis;
+        
+        // Scale intensity based on distance from Sun
+        if (distance > 2 * AU) {
+            const intensity = 0.75 * (1 - Math.min(0.95, (distance / (35 * AU))));
+            planetLight = new THREE.HemisphereLight(0xffffbb, 0x080820, intensity);
+            bodyObject.add(planetLight); // Add light directly to the body object
+        }
+    }
+    
+    // Create an information label for the celestial body
+    createCelestialBodyLabel(data, bodyObject);
+    
+    // For planets with special features, apply their initial texture options
+    if (data.name === "Earth" || data.name === "Venus" || data.name === "Saturn") {
+        // The initial state will be applied when the planet is selected in the UI
+        // But we can trigger it here too for objects that might be visible at startup
+        if (window._textureOptions && window._textureOptions[data.name]) {
+            setTimeout(() => {
+                updatePlanetTextures(data.name);
+            }, 100); // Short delay to ensure everything is initialized
+        }
+    }
+
+    // Previous post-creation moon-separation logic removed – handled earlier in this function.
+}
+
+/**
+ * Creates a label with key statistics for a celestial body
+ * @param {object} data - The data for the celestial body
+ * @param {THREE.Object3D} bodyObject - The Three.js object representing the body
+ */
+function createCelestialBodyLabel(data, bodyObject) {
+    // Create a canvas for the label with higher resolution
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 256;
+    const context = canvas.getContext('2d');
+    
+    // Create a sprite using the canvas as a texture
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    
+    const spriteMaterial = new THREE.SpriteMaterial({ 
+        map: texture,
+        transparent: true,
+        depthTest: true,
+        depthWrite: false,
+        sizeAttenuation: true // Enable size attenuation for more natural appearance
+    });
+    
+    const sprite = new THREE.Sprite(spriteMaterial);
+    sprite.name = `${data.name}_label`;
+    
+    // Set a reasonable scale based on object size
+    const objectRadius = bodyObject.geometry.parameters.radius;
+    const labelScale = objectRadius * 2.5; // Slightly smaller than before
+    sprite.scale.set(labelScale * 2, labelScale, 1);
+    
+    // Position the label above the object with greater offset to avoid intersection
+    const offsetFactor = data.isStar ? 5.0 : 4.0; // Increased height for all labels
+    sprite.position.set(0, objectRadius * offsetFactor, 0);
+    
+    // Add the sprite to the body object
+    bodyObject.add(sprite);
+    
+    // Store distance to camera for adaptive display
+    sprite.lastCameraDistance = 0;
+    
+    // Store function to update the label content
+    sprite.updateLabelContent = function(cameraDistance) {
+        if (!uiSettings.showLabels) {
+            sprite.visible = false;
+            return;
+        }
+        
+        // Store camera distance for smart label decisions
+        sprite.lastCameraDistance = cameraDistance || sprite.lastCameraDistance;
+        
+        // Determine label mode based on distance
+        // Close: detailed view, Far: minimal view
+        const closeThreshold = objectRadius * 20;
+        const isCloseView = sprite.lastCameraDistance < closeThreshold;
+        
+        sprite.visible = true;
+        
+        // Adjust opacity based on distance (more transparent when farther)
+        const baseOpacity = 0.85;
+        const distanceFactor = Math.min(1, 4 * closeThreshold / sprite.lastCameraDistance);
+        spriteMaterial.opacity = baseOpacity * distanceFactor;
+        
+        // Clear the canvas
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw minimal or detailed label based on distance
+        if (isCloseView) {
+            drawDetailedLabel(context, data);
+        } else {
+            drawMinimalLabel(context, data);
+        }
+        
+        // Update the texture
+        texture.needsUpdate = true;
+    };
+    
+    // Function to draw a minimal label (just name and type icon)
+    function drawMinimalLabel(ctx, data) {
+        // Draw a simple pill shape with subtle gradient
+        const width = canvas.width;
+        const height = 60; // Much shorter for minimal view
+        const radius = height / 2;
+        
+        // Background gradient
+        const gradient = ctx.createLinearGradient(0, 0, 0, height);
+        gradient.addColorStop(0, 'rgba(30, 30, 40, 0.8)');
+        gradient.addColorStop(1, 'rgba(20, 20, 30, 0.8)');
+        
+        // Draw rounded pill
+        ctx.beginPath();
+        ctx.moveTo(radius, 0);
+        ctx.lineTo(width - radius, 0);
+        ctx.arcTo(width, 0, width, radius, radius);
+        ctx.arcTo(width, height, width - radius, height, radius);
+        ctx.lineTo(radius, height);
+        ctx.arcTo(0, height, 0, height - radius, radius);
+        ctx.arcTo(0, 0, radius, 0, radius);
+        ctx.closePath();
+        
+        ctx.fillStyle = gradient;
+        ctx.fill();
+        
+        // Subtle border
+        ctx.strokeStyle = 'rgba(120, 220, 255, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        
+        // Object type indicator (icon/color)
+        let typeColor = '#FFFFFF';
+        if (data.isStar) typeColor = '#FFCC33'; // Sun: yellow
+        else if (data.isMoon) typeColor = '#AAAAAA'; // Moons: grey
+        else typeColor = '#66CCFF'; // Planets: blue
+        
+        // Draw colored circle indicator
+        ctx.beginPath();
+        ctx.arc(radius, height/2, radius*0.5, 0, Math.PI*2);
+        ctx.fillStyle = typeColor;
+        ctx.fill();
+        
+        // Draw name
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 24px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(data.name, width/2, height/2);
+    }
+    
+    // Function to draw a detailed label with more info
+    function drawDetailedLabel(ctx, data) {
+        // Draw a rounded rectangle background
+        const width = canvas.width;
+        const height = canvas.height;
+        const cornerRadius = 15;
+        
+        // Background with gentle gradient
+        const gradient = ctx.createLinearGradient(0, 0, 0, height);
+        gradient.addColorStop(0, 'rgba(30, 30, 45, 0.75)');
+        gradient.addColorStop(1, 'rgba(20, 20, 35, 0.75)');
+        
+        // Draw rounded rectangle
+        ctx.beginPath();
+        ctx.moveTo(cornerRadius, 0);
+        ctx.lineTo(width - cornerRadius, 0);
+        ctx.quadraticCurveTo(width, 0, width, cornerRadius);
+        ctx.lineTo(width, height - cornerRadius);
+        ctx.quadraticCurveTo(width, height, width - cornerRadius, height);
+        ctx.lineTo(cornerRadius, height);
+        ctx.quadraticCurveTo(0, height, 0, height - cornerRadius);
+        ctx.lineTo(0, cornerRadius);
+        ctx.quadraticCurveTo(0, 0, cornerRadius, 0);
+        ctx.closePath();
+        
+        ctx.fillStyle = gradient;
+        ctx.fill();
+        
+        // Subtle glow border
+        let borderGradient;
+        if (data.isStar) {
+            borderGradient = ctx.createLinearGradient(0, 0, width, height);
+            borderGradient.addColorStop(0, 'rgba(255, 204, 51, 0.6)');
+            borderGradient.addColorStop(1, 'rgba(255, 153, 51, 0.6)');
+        } else if (data.isMoon) {
+            borderGradient = ctx.createLinearGradient(0, 0, width, height);
+            borderGradient.addColorStop(0, 'rgba(200, 200, 200, 0.4)');
+            borderGradient.addColorStop(1, 'rgba(150, 150, 150, 0.4)');
+        } else {
+            borderGradient = ctx.createLinearGradient(0, 0, width, height);
+            borderGradient.addColorStop(0, 'rgba(102, 204, 255, 0.5)');
+            borderGradient.addColorStop(1, 'rgba(51, 153, 255, 0.5)');
+        }
+        
+        ctx.strokeStyle = borderGradient;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Header with name and icon
+        const headerHeight = 45;
+        
+        // Object type icon color
+        let typeColor = '#FFFFFF';
+        if (data.isStar) typeColor = '#FFCC33'; // Sun: yellow
+        else if (data.isMoon) typeColor = '#CCCCCC'; // Moons: lighter grey
+        else typeColor = '#66CCFF'; // Planets: blue
+        
+        // Draw small indicator circle
+        ctx.beginPath();
+        ctx.arc(30, headerHeight/2, 8, 0, Math.PI*2);
+        ctx.fillStyle = typeColor;
+        ctx.fill();
+        
+        // Draw name with subtle text shadow
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetX = 1;
+        ctx.shadowOffsetY = 1;
+        
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 26px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(data.name, width/2, headerHeight/2 + 5);
+        
+        // Reset shadow
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        
+        // Separator line
+        ctx.beginPath();
+        ctx.moveTo(20, headerHeight + 5);
+        ctx.lineTo(width - 20, headerHeight + 5);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        
+        // Stats section
+        ctx.font = '18px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        
+        let yPos = headerHeight + 35;
+        const lineHeight = 26;
+        
+        // Function to add a stat with colored value
+        function addStat(label, value, valueColor = '#FFFFFF') {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.fillText(label + ':', 25, yPos);
+            
+            ctx.fillStyle = valueColor;
+            ctx.fillText(value, 170, yPos);
+            
+            yPos += lineHeight;
+        }
+        
+        // Basic info for all bodies
+        addStat("Radius", `${formatNumber(data.radius)} km`, '#66CCFF');
+        
+        // Add type-specific stats
+        if (data.isStar) {
+            addStat("Type", "Star", '#FFCC33');
+            addStat("Planets", `${formatNumber(solarSystemPlanetsAndSunData.length - 1)}`, '#66CCFF');
+        } else if (data.isMoon) {
+            addStat("Type", "Moon", '#CCCCCC');
+            addStat("Orbits", data.orbitsAround, '#FFCC33');
+        } else {
+            addStat("Type", "Planet", '#66CCFF');
+        }
+        
+        // Rotation info
+        const rotationDays = Math.abs(data.rotationPeriod);
+        const rotationDir = data.rotationPeriod < 0 ? 'Retrograde' : 'Prograde';
+        const rotationColor = data.rotationPeriod < 0 ? '#FF9966' : '#66FFCC';
+        addStat("Rotation", `${rotationDir}, ${formatNumber(rotationDays)} days`, rotationColor);
+        
+        // Orbital info if available
+        if (data.orbitalProperties) {
+            if (data.trueAnomaly !== undefined) {
+                const orbitPercent = ((data.trueAnomaly < 0 ? data.trueAnomaly + 2 * Math.PI : data.trueAnomaly) / (2 * Math.PI) * 100).toFixed(0);
+                addStat("Orbit", `${orbitPercent}% complete`, '#FFCC66');
+            }
+            
+            if (data.orbitalSpeed !== undefined) {
+                addStat("Speed", `${formatNumber(data.orbitalSpeed)} km/s`, '#FF9966');
+            }
+        }
+    }
+    
+    // Initial update with no camera distance (will use default)
+    sprite.updateLabelContent();
+    
+    return sprite;
+}
+
+/**
+ * Formats a number for display, adding commas for thousands and limiting decimal places
+ */
+function formatNumber(num) {
+    if (num === 0) return '0';
+    
+    // For small numbers (<0.1), show more decimal places
+    if (Math.abs(num) < 0.1 && Math.abs(num) > 0) {
+        return num.toFixed(4);
+    }
+    
+    // For medium numbers, show fewer decimal places
+    if (Math.abs(num) < 100) {
+        return num.toFixed(2);
+    }
+    
+    // For large numbers, show commas for thousands
+    return num.toLocaleString(undefined, {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 1
+    });
+}
+
+// Update label visibility function
+function updateLabelsVisibility() {
+    celestialObjects.forEach(obj => {
+        const label = obj.bodyObject.getObjectByName(`${obj.name}_label`);
+        if (label && label.updateLabelContent) {
+            label.updateLabelContent();
+        }
+    });
+}
+
+// Update orbit lines visibility function
+function updateOrbitLinesVisibility() {
+    celestialObjects.forEach(obj => {
+        if (obj.linePivot) {
+            const orbitLine = obj.linePivot.children[0];
+            if (orbitLine) {
+                orbitLine.visible = uiSettings.showOrbitLines;
+            }
+        }
+    });
+}
+
+function clearScene() {
+    for (let i = celestialObjects.length - 1; i >= 0; i--) {
+        const obj = celestialObjects[i];
+        
+        if (obj.orbitPivot && obj.orbitPivot.parent) {
+            obj.orbitPivot.parent.remove(obj.orbitPivot);
+        } else if (!obj.orbitPivot && obj.bodyObject.parent) { 
+            obj.bodyObject.parent.remove(obj.bodyObject);
+        }
+
+        if (obj.linePivot && obj.linePivot.parent) {
+            obj.linePivot.parent.remove(obj.linePivot);
+        }
+        
+        if (obj.bodyObject.geometry) obj.bodyObject.geometry.dispose();
+        if (obj.bodyObject.material) {
+            if (Array.isArray(obj.bodyObject.material)) {
+                obj.bodyObject.material.forEach(mat => mat.dispose());
+            } else {
+                obj.bodyObject.material.dispose();
+            }
+        }
+        
+        const rings = obj.bodyObject.getObjectByName("Saturn_rings"); // Simplified check
+        if (rings) {
+            if (rings.geometry) rings.geometry.dispose();
+            if (rings.material) rings.material.dispose();
+        }
+
+        if (obj.linePivot) {
+            const lineMesh = obj.linePivot.children[0]; 
+            if (lineMesh && lineMesh.geometry) lineMesh.geometry.dispose();
+            if (lineMesh && lineMesh.material) lineMesh.material.dispose();
+        }
+    }
+    celestialObjects.length = 0; 
+
+    // Ensure lights are not removed if they are direct children of the scene and not re-added
+    // For this setup, ambient and point lights are added once and should remain.
+}
+
+// --- Scene Initialization ---
+clearScene(); 
+scene.add(ambientLight);
+// pointLight is already added to the scene, its position will be set by the Sun's creation.
+
+// Add a skybox using the best available starfield texture
+const starTexturePath = getTexture(["../textures/8k_stars_milky_way.jpg", "../textures/8k_stars.jpg", "../textures/2k_stars_milky_way.jpg", "../textures/2k_stars.jpg"]);
+if (starTexturePath) {
+    const loader = new THREE.TextureLoader();
+    loader.load(starTexturePath, function(texture) {
+        const geometry = new THREE.SphereGeometry(2000000, 64, 64);
+        const material = new THREE.MeshBasicMaterial({
+            map: texture,
+            side: THREE.BackSide
+        });
+        const skybox = new THREE.Mesh(geometry, material);
+        scene.add(skybox);
+    });
+}
+
+solarSystemData.forEach(createCelestialBody);
+console.log("Celestial objects created. Count:", celestialObjects.length);
+celestialObjects.forEach(o => {
+    let parentName = 'Scene';
+    if (o.orbitsAround) {
+        parentName = o.orbitsAround;
+    } else if (o.isStar) {
+        parentName = 'Scene (is Sun)';
+    }
+    // console.log(`${o.name} (orbits ${parentName}), body parent: ${o.bodyObject.parent ? o.bodyObject.parent.name : 'N/A'}, orbit pivot parent: ${o.orbitPivot ? (o.orbitPivot.parent ? o.orbitPivot.parent.name : 'N/A') : 'N/A'}`);
+});
+
+
+// --- UI Panel Logic ---
+window.addEventListener('DOMContentLoaded', () => {
+    const planetSelect = document.getElementById('planet-select');
+    const sizeScaleInput = document.getElementById('size-scale');
+    const sunSizeScaleInput = document.getElementById('sun-size-scale');
+    
+    // Create time scale section
+    const timeScaleSection = document.createElement('div');
+    timeScaleSection.className = 'panel-section';
+    
+    const timeScaleLabel = document.createElement('label');
+    timeScaleLabel.textContent = 'Time Scale:';
+    timeScaleSection.appendChild(timeScaleLabel);
+    
+    // Current setting display
+    const currentTimeScaleDisplay = document.createElement('div');
+    currentTimeScaleDisplay.className = 'current-time-scale';
+    currentTimeScaleDisplay.textContent = simSettings.timePresets[simSettings.currentPresetIndex].label;
+    timeScaleSection.appendChild(currentTimeScaleDisplay);
+    
+    // Create notched time slider
+    const timeScaleSlider = document.createElement('div');
+    timeScaleSlider.className = 'time-scale-slider';
+    
+    // Previous/Next buttons for time scale
+    const prevTimeScaleBtn = document.createElement('button');
+    prevTimeScaleBtn.className = 'time-scale-btn';
+    prevTimeScaleBtn.textContent = '◀';
+    prevTimeScaleBtn.addEventListener('click', () => {
+        if (simSettings.currentPresetIndex > 0) {
+            simSettings.currentPresetIndex--;
+            updateTimeScaleDisplay();
+        }
+    });
+    
+    const nextTimeScaleBtn = document.createElement('button');
+    nextTimeScaleBtn.className = 'time-scale-btn';
+    nextTimeScaleBtn.textContent = '▶';
+    nextTimeScaleBtn.addEventListener('click', () => {
+        if (simSettings.currentPresetIndex < simSettings.timePresets.length - 1) {
+            simSettings.currentPresetIndex++;
+            updateTimeScaleDisplay();
+        }
+    });
+    
+    // Create notch markers
+    const timeScaleNotches = document.createElement('div');
+    timeScaleNotches.className = 'time-scale-notches';
+    simSettings.timePresets.forEach((preset, index) => {
+        const notch = document.createElement('div');
+        notch.className = 'time-scale-notch';
+        if (index === simSettings.currentPresetIndex) {
+            notch.classList.add('active');
+        }
+        notch.addEventListener('click', () => {
+            simSettings.currentPresetIndex = index;
+            updateTimeScaleDisplay();
+        });
+        timeScaleNotches.appendChild(notch);
+    });
+    
+    timeScaleSlider.appendChild(prevTimeScaleBtn);
+    timeScaleSlider.appendChild(timeScaleNotches);
+    timeScaleSlider.appendChild(nextTimeScaleBtn);
+    timeScaleSection.appendChild(timeScaleSlider);
+    
+    // Function to update the time scale display
+    function updateTimeScaleDisplay() {
+        // Update the display text
+        currentTimeScaleDisplay.textContent = simSettings.timePresets[simSettings.currentPresetIndex].label;
+        
+        // Update notch active states
+        const notches = timeScaleNotches.querySelectorAll('.time-scale-notch');
+        notches.forEach((notch, index) => {
+            if (index === simSettings.currentPresetIndex) {
+                notch.classList.add('active');
+            } else {
+                notch.classList.remove('active');
+            }
+        });
+        
+        // Enable/disable prev/next buttons
+        prevTimeScaleBtn.disabled = simSettings.currentPresetIndex === 0;
+        nextTimeScaleBtn.disabled = simSettings.currentPresetIndex === simSettings.timePresets.length - 1;
+        
+        // Update live simulation speed readout
+        updateLiveSimulationDisplay();
+    }
+    
+    // Add a separate simulation speed display
+    const simulationSpeedDisplay = document.createElement('div');
+    simulationSpeedDisplay.className = 'simulation-speed-display';
+    timeScaleSection.appendChild(simulationSpeedDisplay);
+    
+    function updateLiveSimulationDisplay() {
+        const currentPreset = simSettings.timePresets[simSettings.currentPresetIndex];
+        const daysPerSec = currentPreset.daysPerSecond;
+        
+        let displayText;
+        if (daysPerSec < 1) {
+            // Show as seconds per day
+            displayText = `${formatNumber(1/daysPerSec)} seconds = 1 day`;
+        } else {
+            // Show as days per second
+            displayText = `${formatNumber(daysPerSec)} days = 1 second`;
+        }
+        
+        simulationSpeedDisplay.textContent = displayText;
+    }
+    
+    // Initialize the display
+    updateTimeScaleDisplay();
+    
+    // Add time scale section to panel
+    document.getElementById('solar-ui-panel').appendChild(timeScaleSection);
+    
+    // Remove old time exponent elements if they exist
+    const oldTimeElements = document.querySelectorAll('.time-exponent-container, .micro-time-container, .live-time-readout');
+    oldTimeElements.forEach(el => el.remove());
+    
+    // Create visibility toggles section
+    const togglesPanel = document.createElement('div');
+    togglesPanel.className = 'panel-section visibility-toggles';
+    
+    // Create visibility toggle heading
+    const togglesHeading = document.createElement('div');
+    togglesHeading.className = 'option-heading';
+    togglesHeading.textContent = 'Visibility Toggles';
+    togglesPanel.appendChild(togglesHeading);
+    
+    // Orbit Lines Toggle
+    const orbitLinesToggle = document.createElement('div');
+    orbitLinesToggle.className = 'option-toggle';
+    
+    const orbitLinesLabel = document.createElement('label');
+    orbitLinesLabel.textContent = 'Orbit Lines:';
+    orbitLinesToggle.appendChild(orbitLinesLabel);
+    
+    const orbitLinesCheckbox = document.createElement('input');
+    orbitLinesCheckbox.type = 'checkbox';
+    orbitLinesCheckbox.checked = uiSettings.showOrbitLines;
+    orbitLinesCheckbox.addEventListener('change', (e) => {
+        uiSettings.showOrbitLines = e.target.checked;
+        updateOrbitLinesVisibility();
+    });
+    orbitLinesToggle.appendChild(orbitLinesCheckbox);
+    togglesPanel.appendChild(orbitLinesToggle);
+    
+    // Labels Toggle
+    const labelsToggle = document.createElement('div');
+    labelsToggle.className = 'option-toggle';
+    
+    const labelsLabel = document.createElement('label');
+    labelsLabel.textContent = 'Information Labels:';
+    labelsToggle.appendChild(labelsLabel);
+    
+    const labelsCheckbox = document.createElement('input');
+    labelsCheckbox.type = 'checkbox';
+    labelsCheckbox.checked = uiSettings.showLabels;
+    labelsCheckbox.addEventListener('change', (e) => {
+        uiSettings.showLabels = e.target.checked;
+        updateLabelsVisibility();
+    });
+    labelsToggle.appendChild(labelsCheckbox);
+    togglesPanel.appendChild(labelsToggle);
+    
+    // Telemetry Panel Toggle
+    const telemetryToggle = document.createElement('div');
+    telemetryToggle.className = 'option-toggle';
+    
+    const telemetryLabel = document.createElement('label');
+    telemetryLabel.textContent = 'Orbital Telemetry:';
+    telemetryToggle.appendChild(telemetryLabel);
+    
+    const telemetryCheckbox = document.createElement('input');
+    telemetryCheckbox.type = 'checkbox';
+    telemetryCheckbox.checked = uiSettings.showTelemetry;
+    telemetryCheckbox.addEventListener('change', (e) => {
+        uiSettings.showTelemetry = e.target.checked;
+        
+        // Update telemetry panel for current focused object
+        if (window._focusedPlanetName) {
+            const focusedObj = celestialObjects.find(o => o.name === window._focusedPlanetName);
+            window.updateTelemetry(focusedObj);
+        } else {
+            window.updateTelemetry(null);
+        }
+    });
+    telemetryToggle.appendChild(telemetryCheckbox);
+    togglesPanel.appendChild(telemetryToggle);
+    
+    // Realistic Rotation Toggle
+    const rotationToggle = document.createElement('div');
+    rotationToggle.className = 'option-toggle';
+    
+    const rotationLabel = document.createElement('label');
+    rotationLabel.textContent = 'Realistic Axial Rotation:';
+    rotationToggle.appendChild(rotationLabel);
+    
+    const rotationCheckbox = document.createElement('input');
+    rotationCheckbox.type = 'checkbox';
+    rotationCheckbox.checked = uiSettings.realisticRotation;
+    rotationCheckbox.addEventListener('change', (e) => {
+        uiSettings.realisticRotation = e.target.checked;
+    });
+    rotationToggle.appendChild(rotationCheckbox);
+    togglesPanel.appendChild(rotationToggle);
+    
+    // Add toggles panel to the main UI panel
+    document.getElementById('solar-ui-panel').insertBefore(
+        togglesPanel, 
+        document.querySelector('.planet-options') || document.querySelector('.panel-tip')
+    );
+    
+    // Create dynamic planet options panel
+    const planetOptionsPanel = document.createElement('div');
+    planetOptionsPanel.className = 'panel-section planet-options';
+    planetOptionsPanel.style.display = 'none'; // Hide initially
+    document.getElementById('solar-ui-panel').appendChild(planetOptionsPanel);
+    
+    // Add keyboard shortcut tip to the UI
+    const tipElement = document.createElement('div');
+    tipElement.className = 'panel-tip';
+    tipElement.textContent = 'Press R to reset camera position';
+    document.getElementById('solar-ui-panel').appendChild(tipElement);
+    
+    // Store the currently focused planet name
+    window._focusedPlanetName = null;
+    
+    // Store texture enhancement options
+    window._textureOptions = {
+        Earth: {
+            showClouds: true,
+            useNightTexture: false,
+            cloudOpacity: 0.3 // Changed from previous value to 30%
+        },
+        Venus: {
+            showAtmosphere: true,
+            atmosphereOpacity: 0.7
+        },
+        Saturn: {
+            showRings: true,
+            ringOpacity: 0.7
+        },
+        Phobos: {
+            showTopography: false,
+            topographyOpacity: 0.5
+        },
+        Deimos: {
+            showTopography: false,
+            topographyOpacity: 0.5
+        }
+    };
+
+    // Populate planet dropdown
+    planetSelect.innerHTML = '';
+
+    // Create optgroup for planets and Sun
+    const planetsGroup = document.createElement('optgroup');
+    planetsGroup.label = 'Planets & Sun';
+    solarSystemPlanetsAndSunData.forEach((obj) => {
+        const option = document.createElement('option');
+        option.value = obj.name;
+        option.textContent = obj.name;
+        planetsGroup.appendChild(option);
+    });
+    planetSelect.appendChild(planetsGroup);
+
+    // Create optgroup for moons
+    const moonsGroup = document.createElement('optgroup');
+    moonsGroup.label = 'Moons';
+    allMoonsData.forEach((moon) => {
+        const option = document.createElement('option');
+        option.value = moon.name;
+        option.textContent = moon.name;
+        moonsGroup.appendChild(option);
+    });
+    planetSelect.appendChild(moonsGroup);
+    
+    // Reset camera position function
+    function resetCameraPosition() {
+        if (window._focusedPlanetName) {
+            focusOnPlanet(window._focusedPlanetName);
+        }
+    }
+    
+    // Add keyboard shortcut for resetting camera position
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'r' || e.key === 'R') {
+            resetCameraPosition();
+        }
+    });
+    
+    // Update planet texture option UI
+    function updatePlanetOptionsUI(planetName) {
+        planetOptionsPanel.innerHTML = ''; // Clear previous options
+        planetOptionsPanel.style.display = 'none';
+        
+        if (planetName === 'Earth' || planetName === 'Venus' || planetName === 'Saturn') {
+            planetOptionsPanel.style.display = 'block';
+            
+            // Add heading
+            const heading = document.createElement('div');
+            heading.className = 'option-heading';
+            heading.textContent = `${planetName} Visual Options`;
+            planetOptionsPanel.appendChild(heading);
+        }
+        
+        if (planetName === 'Earth') {        
+            // Cloud layer toggle
+            const cloudToggle = document.createElement('div');
+            cloudToggle.className = 'option-toggle';
+            
+            const cloudLabel = document.createElement('label');
+            cloudLabel.textContent = 'Cloud Layer:';
+            cloudToggle.appendChild(cloudLabel);
+            
+            const cloudCheckbox = document.createElement('input');
+            cloudCheckbox.type = 'checkbox';
+            cloudCheckbox.checked = window._textureOptions.Earth.showClouds;
+            cloudCheckbox.addEventListener('change', (e) => {
+                window._textureOptions.Earth.showClouds = e.target.checked;
+                updatePlanetTextures('Earth');
+                
+                // Update opacity slider state
+                cloudOpacityContainer.style.display = e.target.checked ? 'block' : 'none';
+            });
+            cloudToggle.appendChild(cloudCheckbox);
+            
+            planetOptionsPanel.appendChild(cloudToggle);
+            
+            // Cloud opacity slider
+            const cloudOpacityContainer = document.createElement('div');
+            cloudOpacityContainer.className = 'option-slider';
+            cloudOpacityContainer.style.display = window._textureOptions.Earth.showClouds ? 'block' : 'none';
+            
+            const cloudOpacityLabel = document.createElement('label');
+            cloudOpacityLabel.textContent = 'Cloud Opacity:';
+            cloudOpacityContainer.appendChild(cloudOpacityLabel);
+            
+            const cloudOpacitySlider = document.createElement('input');
+            cloudOpacitySlider.type = 'range';
+            cloudOpacitySlider.min = '0.1';
+            cloudOpacitySlider.max = '1.0';
+            cloudOpacitySlider.step = '0.1';
+            cloudOpacitySlider.value = window._textureOptions.Earth.cloudOpacity;
+            cloudOpacitySlider.addEventListener('input', (e) => {
+                window._textureOptions.Earth.cloudOpacity = parseFloat(e.target.value);
+                updatePlanetTextures('Earth');
+            });
+            cloudOpacityContainer.appendChild(cloudOpacitySlider);
+            
+            planetOptionsPanel.appendChild(cloudOpacityContainer);
+            
+            // Day/Night toggle
+            const dayNightToggle = document.createElement('div');
+            dayNightToggle.className = 'option-toggle';
+            
+            const dayNightLabel = document.createElement('label');
+            dayNightLabel.textContent = 'Night View:';
+            dayNightToggle.appendChild(dayNightLabel);
+            
+            const dayNightCheckbox = document.createElement('input');
+            dayNightCheckbox.type = 'checkbox';
+            dayNightCheckbox.checked = window._textureOptions.Earth.useNightTexture;
+            dayNightCheckbox.addEventListener('change', (e) => {
+                window._textureOptions.Earth.useNightTexture = e.target.checked;
+                updatePlanetTextures('Earth');
+            });
+            dayNightToggle.appendChild(dayNightCheckbox);
+            
+            planetOptionsPanel.appendChild(dayNightToggle);
+            
+            // Apply initial texture state
+            updatePlanetTextures('Earth');
+        } 
+        else if (planetName === 'Venus') {
+            // Atmosphere toggle
+            const atmosphereToggle = document.createElement('div');
+            atmosphereToggle.className = 'option-toggle';
+            
+            const atmosphereLabel = document.createElement('label');
+            atmosphereLabel.textContent = 'Atmosphere:';
+            atmosphereToggle.appendChild(atmosphereLabel);
+            
+            const atmosphereCheckbox = document.createElement('input');
+            atmosphereCheckbox.type = 'checkbox';
+            atmosphereCheckbox.checked = window._textureOptions.Venus.showAtmosphere;
+            atmosphereCheckbox.addEventListener('change', (e) => {
+                window._textureOptions.Venus.showAtmosphere = e.target.checked;
+                updatePlanetTextures('Venus');
+                
+                // Update opacity slider state
+                atmosphereOpacityContainer.style.display = e.target.checked ? 'block' : 'none';
+            });
+            atmosphereToggle.appendChild(atmosphereCheckbox);
+            
+            planetOptionsPanel.appendChild(atmosphereToggle);
+            
+            // Atmosphere opacity slider
+            const atmosphereOpacityContainer = document.createElement('div');
+            atmosphereOpacityContainer.className = 'option-slider';
+            atmosphereOpacityContainer.style.display = window._textureOptions.Venus.showAtmosphere ? 'block' : 'none';
+            
+            const atmosphereOpacityLabel = document.createElement('label');
+            atmosphereOpacityLabel.textContent = 'Atmosphere Opacity:';
+            atmosphereOpacityContainer.appendChild(atmosphereOpacityLabel);
+            
+            const atmosphereOpacitySlider = document.createElement('input');
+            atmosphereOpacitySlider.type = 'range';
+            atmosphereOpacitySlider.min = '0.1';
+            atmosphereOpacitySlider.max = '1.0';
+            atmosphereOpacitySlider.step = '0.1';
+            atmosphereOpacitySlider.value = window._textureOptions.Venus.atmosphereOpacity;
+            atmosphereOpacitySlider.addEventListener('input', (e) => {
+                window._textureOptions.Venus.atmosphereOpacity = parseFloat(e.target.value);
+                updatePlanetTextures('Venus');
+            });
+            atmosphereOpacityContainer.appendChild(atmosphereOpacitySlider);
+            
+            planetOptionsPanel.appendChild(atmosphereOpacityContainer);
+            
+            // Apply initial texture state
+            updatePlanetTextures('Venus');
+        }
+        else if (planetName === 'Saturn') {
+            // Rings toggle
+            const ringsToggle = document.createElement('div');
+            ringsToggle.className = 'option-toggle';
+            
+            const ringsLabel = document.createElement('label');
+            ringsLabel.textContent = 'Rings:';
+            ringsToggle.appendChild(ringsLabel);
+            
+            const ringsCheckbox = document.createElement('input');
+            ringsCheckbox.type = 'checkbox';
+            ringsCheckbox.checked = window._textureOptions.Saturn.showRings;
+            ringsCheckbox.addEventListener('change', (e) => {
+                window._textureOptions.Saturn.showRings = e.target.checked;
+                updatePlanetTextures('Saturn');
+                
+                // Update opacity slider state
+                ringOpacityContainer.style.display = e.target.checked ? 'block' : 'none';
+            });
+            ringsToggle.appendChild(ringsCheckbox);
+            
+            planetOptionsPanel.appendChild(ringsToggle);
+            
+            // Ring opacity slider
+            const ringOpacityContainer = document.createElement('div');
+            ringOpacityContainer.className = 'option-slider';
+            ringOpacityContainer.style.display = window._textureOptions.Saturn.showRings ? 'block' : 'none';
+            
+            const ringOpacityLabel = document.createElement('label');
+            ringOpacityLabel.textContent = 'Ring Opacity:';
+            ringOpacityContainer.appendChild(ringOpacityLabel);
+            
+            const ringOpacitySlider = document.createElement('input');
+            ringOpacitySlider.type = 'range';
+            ringOpacitySlider.min = '0.1';
+            ringOpacitySlider.max = '1.0';
+            ringOpacitySlider.step = '0.1';
+            ringOpacitySlider.value = window._textureOptions.Saturn.ringOpacity;
+            ringOpacitySlider.addEventListener('input', (e) => {
+                window._textureOptions.Saturn.ringOpacity = parseFloat(e.target.value);
+                updatePlanetTextures('Saturn');
+            });
+            ringOpacityContainer.appendChild(ringOpacitySlider);
+            
+            planetOptionsPanel.appendChild(ringOpacityContainer);
+            
+            // Apply initial texture state
+            updatePlanetTextures('Saturn');
+        }
+        else if (planetName === 'Phobos' || planetName === 'Deimos') {
+            planetOptionsPanel.style.display = 'block';
+            const options = window._textureOptions[planetName];
+
+            // Heading
+            const heading = document.createElement('div');
+            heading.className = 'option-heading';
+            heading.textContent = `${planetName} Visual Options`;
+            planetOptionsPanel.appendChild(heading);
+
+            // Topography toggle
+            const topoToggleDiv = document.createElement('div');
+            topoToggleDiv.className = 'option-toggle';
+            const topoLabel = document.createElement('label');
+            topoLabel.textContent = 'Topography Map:';
+            topoToggleDiv.appendChild(topoLabel);
+            const topoCheckbox = document.createElement('input');
+            topoCheckbox.type = 'checkbox';
+            topoCheckbox.checked = options.showTopography;
+            topoCheckbox.addEventListener('change', (e) => {
+                options.showTopography = e.target.checked;
+                updatePlanetTextures(planetName);
+                topoOpacityContainer.style.display = e.target.checked ? 'block' : 'none';
+            });
+            topoToggleDiv.appendChild(topoCheckbox);
+            planetOptionsPanel.appendChild(topoToggleDiv);
+
+            // Topography opacity slider
+            const topoOpacityContainer = document.createElement('div');
+            topoOpacityContainer.className = 'option-slider';
+            topoOpacityContainer.style.display = options.showTopography ? 'block' : 'none';
+            const topoOpacityLabel = document.createElement('label');
+            topoOpacityLabel.textContent = 'Topo Opacity:';
+            topoOpacityContainer.appendChild(topoOpacityLabel);
+            const topoOpacitySlider = document.createElement('input');
+            topoOpacitySlider.type = 'range';
+            topoOpacitySlider.min = '0.1'; topoOpacitySlider.max = '1.0'; topoOpacitySlider.step = '0.1';
+            topoOpacitySlider.value = options.topographyOpacity;
+            topoOpacitySlider.addEventListener('input', (e) => {
+                options.topographyOpacity = parseFloat(e.target.value);
+                updatePlanetTextures(planetName);
+            });
+            topoOpacityContainer.appendChild(topoOpacitySlider);
+            planetOptionsPanel.appendChild(topoOpacityContainer);
+
+            // Apply initial state
+            updatePlanetTextures(planetName);
+        }
+    }
+    
+    // Update planet textures based on current options
+    function updatePlanetTextures(planetName) {
+        const planet = celestialObjects.find(obj => obj.name === planetName);
+        if (!planet) return;
+        
+        if (planetName === 'Earth') {
+            // Find Earth in the celestial objects
+            const earth = planet.bodyObject;
+            const options = window._textureOptions.Earth;
+            
+            // Update Earth texture based on day/night option
+            const textureUrl = options.useNightTexture ? 
+                getTexture(TEXTURES.EarthNight) : 
+                getTexture(TEXTURES.EarthDay);
+            
+            earth.material.map = loadTextureHQ(textureUrl); // Use loadTextureHQ
+            earth.material.needsUpdate = true;
+            
+            // Handle cloud layer
+            let cloudLayer = earth.getObjectByName('earth_clouds');
+            
+            if (options.showClouds) {
+                if (!cloudLayer) {
+                    // Create cloud layer if it doesn't exist
+                    const cloudGeometry = new THREE.SphereGeometry(
+                        earth.geometry.parameters.radius * 1.01, 
+                        64, 
+                        32
+                    );
+                    const cloudMaterial = new THREE.MeshStandardMaterial({
+                        map: loadTextureHQ(getTexture(TEXTURES.EarthClouds)), // Use loadTextureHQ
+                        transparent: true,
+                        opacity: options.cloudOpacity,
+                        depthWrite: false
+                    });
+                    cloudLayer = new THREE.Mesh(cloudGeometry, cloudMaterial);
+                    cloudLayer.name = 'earth_clouds';
+                    earth.add(cloudLayer);
+                } else {
+                    // Update opacity dynamically
+                    cloudLayer.material.opacity = options.cloudOpacity;
+                    cloudLayer.material.map = loadTextureHQ(getTexture(TEXTURES.EarthClouds)); // Ensure map is loaded with HQ
+                    cloudLayer.material.needsUpdate = true;
+                }
+            } else if (cloudLayer) {
+                // Remove cloud layer if it exists and shouldn't be shown
+                earth.remove(cloudLayer);
+                if (cloudLayer.material) cloudLayer.material.dispose();
+                if (cloudLayer.geometry) cloudLayer.geometry.dispose();
+            }
+        }
+        else if (planetName === 'Venus') {
+            // Find Venus in the celestial objects
+            const venus = planet.bodyObject;
+            const options = window._textureOptions.Venus;
+            
+            // Handle atmosphere layer
+            let atmosphereLayer = venus.getObjectByName('venus_atmosphere');
+            
+            if (options.showAtmosphere) {
+                if (!atmosphereLayer) {
+                    // Create atmosphere layer if it doesn't exist
+                    const atmosphereGeometry = new THREE.SphereGeometry(
+                        venus.geometry.parameters.radius * 1.03, 
+                        64, 
+                        32
+                    );
+                    const atmosphereMaterial = new THREE.MeshStandardMaterial({
+                        map: loadTextureHQ(getTexture(TEXTURES.VenusAtmosphere)), // Use loadTextureHQ
+                        transparent: true,
+                        opacity: options.atmosphereOpacity,
+                        depthWrite: false
+                    });
+                    atmosphereLayer = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
+                    atmosphereLayer.name = 'venus_atmosphere';
+                    venus.add(atmosphereLayer);
+                } else {
+                    // Update opacity dynamically
+                    atmosphereLayer.material.opacity = options.atmosphereOpacity;
+                    atmosphereLayer.material.map = loadTextureHQ(getTexture(TEXTURES.VenusAtmosphere)); // Ensure map is loaded with HQ
+                    atmosphereLayer.material.needsUpdate = true;
+                }
+            } else if (atmosphereLayer) {
+                // Remove atmosphere layer if it exists and shouldn't be shown
+                venus.remove(atmosphereLayer);
+                if (atmosphereLayer.material) atmosphereLayer.material.dispose();
+                if (atmosphereLayer.geometry) atmosphereLayer.geometry.dispose();
+            }
+        }
+        else if (planetName === 'Saturn') {
+            // Find Saturn in the celestial objects
+            const saturn = planet.bodyObject;
+            const options = window._textureOptions.Saturn;
+            
+            // Handle rings
+            let rings = saturn.getObjectByName('Saturn_rings');
+            
+            if (options.showRings) {
+                if (!rings) {
+                    // Real Saturn ring radii (A+B): inner ~67,000 km, outer ~140,000 km
+                    const ringInnerRadius = 67000 * RADIUS_SCALE;
+                    const ringOuterRadius = 140000 * RADIUS_SCALE;
+                    // Custom UV mapping for annular texture
+                    const segments = 128;
+                    const ringGeometry = new THREE.RingGeometry(ringInnerRadius, ringOuterRadius, segments);
+                    // Fix UVs: map annularly
+                    const uv = ringGeometry.attributes.uv;
+                    for (let i = 0; i < uv.count; i++) {
+                        const x = ringGeometry.attributes.position.getX(i);
+                        const y = ringGeometry.attributes.position.getY(i);
+                        const r = Math.sqrt(x * x + y * y);
+                        // 0 at inner, 1 at outer
+                        uv.setXY(i, (r - ringInnerRadius) / (ringOuterRadius - ringInnerRadius), 1);
+                    }
+                    ringGeometry.attributes.uv.needsUpdate = true;
+                    const ringMaterial = new THREE.MeshBasicMaterial({ 
+                        map: textureLoader.load(getTexture(TEXTURES.SaturnRings)),
+                        side: THREE.DoubleSide,
+                        transparent: true,
+                        opacity: options.ringOpacity,
+                        depthWrite: false 
+                    });
+                    rings = new THREE.Mesh(ringGeometry, ringMaterial);
+                    rings.name = 'Saturn_rings';
+                    rings.rotation.x = Math.PI / 2;
+                    saturn.add(rings);
+                } else {
+                    rings.material.opacity = options.ringOpacity;
+                    rings.material.needsUpdate = true;
+                }
+            } else if (rings) {
+                saturn.remove(rings);
+                if (rings.material) rings.material.dispose();
+                if (rings.geometry) rings.geometry.dispose();
+            }
+        }
+        else if (planetName === 'Phobos' || planetName === 'Deimos') {
+            const body = planet.bodyObject;
+            const options = window._textureOptions[planetName];
+            const topoTextureName = planetName === 'Phobos' ? 'PhobosTopography' : 'DeimosTopography';
+            
+            // Base texture (already set in createCelestialBody, but ensure it's using loadTextureHQ if not already)
+            // body.material.map = loadTextureHQ(getTexture(TEXTURES[planetName]));
+            // body.material.needsUpdate = true; // If base texture can change, otherwise not needed here.
+
+            let topographyLayer = body.getObjectByName(`${planetName}_topography`);
+            if (options.showTopography) {
+                const topoTextureUrl = getTexture(TEXTURES[topoTextureName]);
+                if (topoTextureUrl) {
+                    if (!topographyLayer) {
+                        const topoGeometry = new THREE.SphereGeometry(
+                            body.geometry.parameters.radius * 1.005, // Slightly larger for overlay
+                            body.geometry.parameters.widthSegments, 
+                            body.geometry.parameters.heightSegments
+                        );
+                        const topoMaterial = new THREE.MeshStandardMaterial({
+                            map: loadTextureHQ(topoTextureUrl),
+                            transparent: true,
+                            opacity: options.topographyOpacity,
+                            depthWrite: false
+                        });
+                        topographyLayer = new THREE.Mesh(topoGeometry, topoMaterial);
+                        topographyLayer.name = `${planetName}_topography`;
+                        body.add(topographyLayer);
+                    } else {
+                        topographyLayer.material.opacity = options.topographyOpacity;
+                        topographyLayer.material.map = loadTextureHQ(topoTextureUrl); // Re-assign map in case it needs update
+                        topographyLayer.material.needsUpdate = true;
+                    }
+                } else {
+                    console.warn(`Topography texture for ${planetName} not found.`);
+                    if (topographyLayer) { // Remove if texture is missing but layer exists
+                        body.remove(topographyLayer);
+                        if (topographyLayer.material) topographyLayer.material.dispose();
+                        if (topographyLayer.geometry) topographyLayer.geometry.dispose();
+                    }
+                }
+            } else if (topographyLayer) {
+                body.remove(topographyLayer);
+                if (topographyLayer.material) topographyLayer.material.dispose();
+                if (topographyLayer.geometry) topographyLayer.geometry.dispose();
+            }
+        }
+    }
+
+    // Create telemetry panel
+    createTelemetryPanel();
+    
+    // Camera focus logic
+    function focusOnPlanet(planetName) {
+        const obj = celestialObjects.find(o => o.name === planetName);
+        if (!obj) return;
+        
+        window._focusedPlanetName = planetName;
+        
+        // Show appropriate texture options for this planet
+        updatePlanetOptionsUI(planetName);
+        
+        // Update telemetry with current focused object
+        window.updateTelemetry(obj);
+        
+        // Get world position of the planet
+        const worldPos = new THREE.Vector3();
+        obj.bodyObject.getWorldPosition(worldPos);
+        
+        // Set the orbit controls target to the planet
+        controls.target.copy(worldPos);
+        
+        // Position the camera at a good initial viewing distance
+        const scaledRadius = obj.bodyObject.geometry.parameters.radius * obj.bodyObject.scale.x;
+        const distanceFactor = 5 + (obj.name === "Sun" ? 2 : 0); // Slightly further for the Sun
+        const cameraDistance = scaledRadius * distanceFactor;
+        
+        // Adjust minimum zoom distance based on object size
+        // For small moons like Phobos, allow much closer approach
+        const minZoomDistance = Math.max(0.1, scaledRadius * 1.2);
+        controls.minDistance = minZoomDistance;
+        
+        // Calculate initial camera position - slightly above and to the side of the planet
+        const cameraOffset = new THREE.Vector3(cameraDistance, cameraDistance * 0.5, cameraDistance);
+        const newCameraPosition = worldPos.clone().add(cameraOffset);
+        
+        // Set the camera position and look at the planet
+        camera.position.copy(newCameraPosition);
+        camera.lookAt(worldPos);
+        
+        // Store the relative position between camera and planet for orbit following
+        lastPlanetPosition.copy(worldPos);
+        cameraRelativePosition.copy(camera.position).sub(worldPos);
+        
+        // Update the focused object's label
+        const label = obj.bodyObject.getObjectByName(`${obj.name}_label`);
+        if (label && label.updateLabelContent) {
+            label.updateLabelContent();
+        }
+        // Update last focus change timestamp
+        lastFocusChangeTimestamp = Date.now();
+    }
+
+    planetSelect.addEventListener('change', e => {
+        focusOnPlanet(e.target.value);
+    });
+
+    // Size scale logic (for all planets except Sun)
+    let currentSizeScale = 1;
+    sizeScaleInput.addEventListener('input', e => {
+        currentSizeScale = parseFloat(e.target.value);
+        celestialObjects.forEach(obj => {
+            if (!obj.isStar) {
+                obj.bodyObject.scale.set(currentSizeScale, currentSizeScale, currentSizeScale);
+            }
+        });
+    });
+
+    // Sun size scale logic
+    let currentSunScale = 0.1;
+    function setSunScale(scale) {
+        celestialObjects.forEach(obj => {
+            if (obj.isStar) {
+                obj.bodyObject.scale.set(scale, scale, scale);
+            }
+        });
+    }
+    setSunScale(currentSunScale); // Default Sun scale
+    sunSizeScaleInput.addEventListener('input', e => {
+        currentSunScale = parseFloat(e.target.value);
+        setSunScale(currentSunScale);
+    });
+
+    // Create the orbital telemetry panel
+    function createTelemetryPanel() {
+        // Create a floating panel for real-time orbital data
+        const panel = document.createElement('div');
+        panel.id = 'orbital-telemetry';
+        panel.className = 'glass-panel telemetry-panel';
+        panel.style.display = 'none'; // Initially hidden
+        
+        // Create header
+        const header = document.createElement('div');
+        header.className = 'panel-header';
+        header.textContent = 'Orbital Telemetry';
+        panel.appendChild(header);
+        
+        // Create content container
+        const content = document.createElement('div');
+        content.className = 'telemetry-content';
+        panel.appendChild(content);
+        
+        // Add panel to document
+        document.body.appendChild(panel);
+        
+        // Function to update telemetry data
+        window.updateTelemetry = function(object) {
+            const panel = document.getElementById('orbital-telemetry');
+            if (!uiSettings.showTelemetry || !panel) {
+                if (panel) panel.style.display = 'none';
+                return;
+            }
+            panel.style.display = 'block';
+            const content = panel.querySelector('.telemetry-content');
+            content.innerHTML = '';
+            // Simulation time
+            const simTimeDiv = document.createElement('div');
+            simTimeDiv.className = 'telemetry-row';
+            simTimeDiv.innerHTML = `<div class='telemetry-label'>Sim Time</div><div class='telemetry-value'>${formatNumber(simulationDaysElapsed)} days (${(simulationDaysElapsed/365.25).toFixed(2)} yr)</div>`;
+            content.appendChild(simTimeDiv);
+            // Elapsed wall time
+            const wallElapsed = ((Date.now() - simulationStartTimestamp) / 1000).toFixed(1);
+            const wallDiv = document.createElement('div');
+            wallDiv.className = 'telemetry-row';
+            wallDiv.innerHTML = `<div class='telemetry-label'>Wall Time</div><div class='telemetry-value'>${wallElapsed} sec</div>`;
+            content.appendChild(wallDiv);
+            // Elapsed since focus change
+            const focusElapsed = ((Date.now() - lastFocusChangeTimestamp) / 1000).toFixed(1);
+            const focusDiv = document.createElement('div');
+            focusDiv.className = 'telemetry-row';
+            focusDiv.innerHTML = `<div class='telemetry-label'>Since Focus</div><div class='telemetry-value'>${focusElapsed} sec</div>`;
+            content.appendChild(focusDiv);
+            // Object-specific telemetry
+            if (!object) {
+                content.innerHTML += '<div class="telemetry-message">Select a planet or moon to view orbital data</div>';
+                return;
+            }
+            // Object name header
+            const nameHeader = document.createElement('div');
+            nameHeader.className = 'telemetry-name';
+            nameHeader.textContent = object.name;
+            content.appendChild(nameHeader);
+            // Orbital parameters section
+            if (object.orbitalProperties) {
+                // Safely access potentially undefined properties with fallbacks or checks.
+                const currentMeanAnomalyDeg = object.currentMeanAnomaly !== undefined ? (object.currentMeanAnomaly * 180 / Math.PI).toFixed(2) : 'N/A';
+                addTelemetryRow(content, 'Mean Anomaly', `${currentMeanAnomalyDeg}°`);
+                
+                const trueAnomalyDeg = object.trueAnomaly !== undefined ? (object.trueAnomaly * 180 / Math.PI).toFixed(2) : 'N/A';
+                addTelemetryRow(content, 'True Anomaly', `${trueAnomalyDeg}°`);
+                
+                let orbitPercentage = 'N/A';
+                if (object.trueAnomaly !== undefined) {
+                    const normalizedTrueAnomaly = object.trueAnomaly < 0 ? object.trueAnomaly + 2 * Math.PI : object.trueAnomaly;
+                    orbitPercentage = (normalizedTrueAnomaly / (2 * Math.PI) * 100).toFixed(1);
+                }
+                addTelemetryRow(content, 'Orbit % (periapsis)', `${orbitPercentage}%`);
+                
+                addTelemetryRow(content, 'Total Orbits', `${object.orbitCount || 0}`);
+                addTelemetryRow(content, 'Orbital Speed', object.orbitalSpeed !== undefined ? `${formatNumber(object.orbitalSpeed)} km/s` : 'N/A');
+
+                // Distance from Parent / Sun logic (already fairly robust, but ensure properties exist)
+                let distanceFromParentText = 'N/A';
+                if (object.isMoon && object.orbitsAround) {
+                    const parentObj = celestialObjects.find(p => p.name === object.orbitsAround);
+                    if (parentObj && parentObj.bodyObject && object.bodyObject) { // Check bodyObjects
+                        // ... (distance calculation as before)
+                        const distVec = new THREE.Vector3();
+                        object.bodyObject.getWorldPosition(distVec);
+                        const parentPos = new THREE.Vector3();
+                        parentObj.bodyObject.getWorldPosition(parentPos);
+                        const unscaledDistanceToParent = distVec.distanceTo(parentPos);
+                        const distToParentKm = unscaledDistanceToParent / (object.isMoon ? MOON_DISTANCE_SCALE : DISTANCE_SCALE);
+                        distanceFromParentText = `${formatNumber(distToParentKm)} km from ${object.orbitsAround}`;
+                    }
+                } else if (!object.isStar && object.bodyObject) { // Check bodyObject for planet
+                    const sunObj = celestialObjects.find(p => p.isStar && p.bodyObject); // Check bodyObject for sun
+                    if (sunObj) {
+                        // ... (distance calculation as before)
+                        const distVec = new THREE.Vector3();
+                        object.bodyObject.getWorldPosition(distVec);
+                        const sunPos = new THREE.Vector3();
+                        sunObj.bodyObject.getWorldPosition(sunPos);
+                        const unscaledDistanceToSun = distVec.distanceTo(sunPos);
+                        const distToSunKm = unscaledDistanceToSun / DISTANCE_SCALE;
+                        distanceFromParentText = `${formatNumber(distToSunKm / AU)} AU from Sun`;
+                    }
+                }
+                addTelemetryRow(content, 'Current Distance', distanceFromParentText);
+
+                // Orbital Elements (props should be safe if object.orbitalProperties exists)
+                const props = object.orbitalProperties;
+                addTelemetryRow(content, 'Orbital Period', `${formatNumber(props.period)} days`); // Moved from top for grouping
+                // ... (rest of orbital elements: semi-major axis, eccentricity, etc.)
+                // ... (rotational info and simulation time scale) ...
+            } else {
+                content.innerHTML += '<div class="telemetry-message">No orbital data available for this object</div>';
+            }
+        };
+        
+        return panel;
+    }
+
+    function addTelemetryRow(container, label, value) {
+        const row = document.createElement('div');
+        row.className = 'telemetry-row';
+        
+        const labelElem = document.createElement('div');
+        labelElem.className = 'telemetry-label';
+        labelElem.textContent = label;
+        
+        const valueElem = document.createElement('div');
+        valueElem.className = 'telemetry-value';
+        valueElem.textContent = value;
+        
+        row.appendChild(labelElem);
+        row.appendChild(valueElem);
+        container.appendChild(row);
+    }
+
+    // ... (rest of the function content remains unchanged)
+});
+
+// --- END UI Panel Logic ---
+
+// Animation loop
+function animate() {
+    requestAnimationFrame(animate);
+    const delta = clock.getDelta(); 
+    const simulationTimeDeltaDays = delta * simulationSpeedFactor * simSettings.timeScale;
+    simulationDaysElapsed += simulationTimeDeltaDays;
+
+    // Define a world position vector for lighting calculations
+    const worldPos = new THREE.Vector3();
+    
+    // Store camera position before updates for checking if user moved it
+    const previousCameraPosition = camera.position.clone();
+    
+    // Update planet positions and orbital calculations
+    celestialObjects.forEach(obj => {
+        if (obj.rotationPeriod && obj.bodyObject) {
+            const rotationRadPerDay = (2 * Math.PI) / obj.rotationPeriod;
+            let rotationDelta;
+            if (uiSettings.realisticRotation) {
+                // Tie axial spin to the same simulation time scaling as orbits
+                rotationDelta = rotationRadPerDay * simulationTimeDeltaDays;
+            } else {
+                // Fallback to real-time aesthetic spin
+            const rotationRadPerSecond = rotationRadPerDay / (24 * 60 * 60);
+                rotationDelta = rotationRadPerSecond * delta;
+            }
+            obj.bodyObject.rotateY(rotationDelta);
+            
+            // Saturn's rings don't rotate as a solid structure
+            // In reality, each particle orbits independently with different speeds
+        }
+
+        if (obj.orbitalProperties && obj.orbitalPeriodDays && obj.orbitPivot && obj.bodyObject) {
+            const { semiMajorAxis: a_km, eccentricity: e, argumentOfPerihelion: omega_deg } = obj.orbitalProperties;
+            
+            // Use different scale for moons vs planets
+            const isMoon = obj.name === "Moon" || obj.name === "Phobos" || obj.name === "Deimos" || 
+                           obj.name === "Io" || obj.name === "Europa" || obj.name === "Ganymede" || 
+                           obj.name === "Callisto";
+            let a = a_km * (isMoon ? MOON_DISTANCE_SCALE : DISTANCE_SCALE);
+            if (obj.isMoon && obj.visualOrbitFactor) {
+                a *= obj.visualOrbitFactor; // Apply visual adjustment
+            }
+
+            const meanMotionRadPerDay = (2 * Math.PI) / obj.orbitalPeriodDays;
+            const newMeanAnomaly = (obj.currentMeanAnomaly + meanMotionRadPerDay * simulationTimeDeltaDays) % (2 * Math.PI);
+
+            // Robust Orbit Counting - BEFORE updating obj.currentMeanAnomaly
+            if (obj.currentMeanAnomaly !== undefined && obj.currentMeanAnomaly > newMeanAnomaly + Math.PI) { 
+                if (!obj.orbitCount) obj.orbitCount = 0;
+                obj.orbitCount++;
+            }
+            obj.currentMeanAnomaly = newMeanAnomaly; // NOW update currentMeanAnomaly
+
+            const E = solveKeplerEquation(obj.currentMeanAnomaly, e); 
+            const nu = 2 * Math.atan2(Math.sqrt(1 + e) * Math.sin(E / 2), Math.sqrt(1 - e) * Math.cos(E / 2)); 
+            obj.trueAnomaly = nu; // Store true anomaly for telemetry
+
+            const r = a * (1 - e * Math.cos(E)); 
+
+            const angleInOrbitalPlane = nu + THREE.MathUtils.degToRad(omega_deg || 0);
+            const x_orb_plane = r * Math.cos(angleInOrbitalPlane);
+            const z_orb_plane = r * Math.sin(angleInOrbitalPlane);
+            
+            obj.bodyObject.position.set(x_orb_plane, 0, -z_orb_plane); 
+        }
+        
+        // Update labels to face camera
+        if (obj.bodyObject) {
+            const label = obj.bodyObject.getObjectByName(`${obj.name}_label`);
+            if (label) {
+                // Get the object's world position
+                const bodyWorldPos = new THREE.Vector3();
+                obj.bodyObject.getWorldPosition(bodyWorldPos);
+                
+                // Calculate distance to camera
+                const distanceToCamera = camera.position.distanceTo(bodyWorldPos);
+                
+                // REFINED LABEL POSITIONING SYSTEM - MORE SUBTLE AND LESS INTRUSIVE
+                
+                // 1. Get object radius for scaling and positioning
+                const objectRadius = obj.bodyObject.geometry.parameters.radius;
+                
+                // Improved label positioning that doesn't follow object rotation
+                // 1. Calculate a world position directly above the object in global Y
+                const worldLabelPos = bodyWorldPos.clone();
+                worldLabelPos.y += objectRadius * (obj.isStar ? 0.3 : 2.5); // Lower Sun label, keep planets/moons
+                
+                // 2. Convert this world position to object local space
+                const localLabelPos = obj.bodyObject.worldToLocal(worldLabelPos.clone());
+                
+                // 3. Set label position in local coordinates
+                label.position.copy(localLabelPos);
+                
+                // 6. SCALED DOWN LABELS - make labels smaller and more proportional to objects
+                // Base scale now smaller relative to object
+                // Sun gets a larger label scale while keeping planets/moons as they are
+                const baseScale = obj.isStar ? objectRadius * 2.5 : objectRadius * 1.5;
+                
+                // Less aggressive distance scaling
+                const visualScale = Math.min(1.2, Math.max(0.5, 0.7 + 50 / distanceToCamera));
+                
+                // Apply the scaled-down size
+                const finalScale = baseScale * visualScale;
+                label.scale.set(finalScale * 2, finalScale, 1);
+                
+                // Always orient the label to face the camera
+                label.quaternion.copy(camera.quaternion);
+                
+                // 7. Selective depth test based on distance
+                if (label.material) {
+                    // Ensure label is visible if enabled
+                    label.visible = uiSettings.showLabels;
+                    
+                    // Set renderOrder to a high value
+                    label.renderOrder = 999;
+                    
+                    // Only disable depth test for distant objects
+                    // For closer objects, maintain proper depth ordering
+                    if (distanceToCamera > objectRadius * 30) {
+                        label.material.depthTest = false;
+                    } else {
+                        // For closer objects, enable depth test but bias slightly toward camera
+                        label.material.depthTest = true;
+                        label.renderOrder = 1;
+                    }
+                }
+                
+                // Update label content based on distance
+                label.updateLabelContent(distanceToCamera);
+            }
+        }
+    });
+
+    // Update camera target and lighting for the focused planet
+    if (window._focusedPlanetName) {
+        const focusedObj = celestialObjects.find(o => o.name === window._focusedPlanetName);
+        if (focusedObj && !focusedObj.isStar) {
+            // Get the world position of the focused planet
+            focusedObj.bodyObject.getWorldPosition(worldPos);
+            
+            // Always update the orbit controls target to the planet position
+            // This makes the planet the center of orbital camera movement
+            controls.target.copy(worldPos);
+            
+            // Calculate the planet's movement since last frame
+            const planetMovement = new THREE.Vector3().subVectors(worldPos, lastPlanetPosition);
+            
+            // If the user hasn't manually moved the camera since last frame
+            // (The only position change should be exactly what we applied last frame)
+            if (controls.enabled) {
+                // Update the camera position to maintain the same relative position to the planet
+                camera.position.add(planetMovement);
+            }
+            
+            // Update relative position if the user has manually moved the camera
+            // by checking the difference between actual and expected positions
+            const expectedPosition = new THREE.Vector3().addVectors(lastPlanetPosition, cameraRelativePosition);
+            if (!previousCameraPosition.equals(expectedPosition)) {
+                // User has moved the camera, update the relative position
+                cameraRelativePosition.copy(camera.position).sub(worldPos);
+            }
+            
+            // Update last planet position for next frame
+            lastPlanetPosition.copy(worldPos);
+            
+            // Position a target for the directional light to point at the focused planet
+            if (!sunLight.target.isObject3D) {
+                // Create a target object if it doesn't exist
+                sunLight.target = new THREE.Object3D();
+                scene.add(sunLight.target);
+            }
+            
+            // Update the target position to match the focused planet
+            sunLight.target.position.copy(worldPos);
+            
+            // Create an additional point light to ensure the focused planet is well-lit
+            if (!window._focusLight) {
+                window._focusLight = new THREE.PointLight(0xffffff, 2, 0, 1);
+                scene.add(window._focusLight);
+            }
+            
+            // Position the focus light slightly above the planet for better illumination
+            const focusLightOffset = new THREE.Vector3(0, focusedObj.bodyObject.geometry.parameters.radius * 3, 0);
+            window._focusLight.position.copy(worldPos.clone().add(focusLightOffset));
+        }
+    } else if (window._focusLight) {
+        // Remove the focus light if we're not focusing on any planet
+        scene.remove(window._focusLight);
+        window._focusLight = null;
+    }
+
+    // Insert Saturn rings rotation update before controls.update()
+    // This will adjust the rings rotation so that the net rotation corresponds to a 0.45 day period
+    const saturnCelestial = celestialObjects.find(obj => obj.name === "Saturn");
+    if (saturnCelestial) {
+        const rings = saturnCelestial.bodyObject.getObjectByName('Saturn_rings');
+        if (rings) {
+            // Calculate Saturn's rotation rate in rad/day based on its rotationPeriod
+            const saturnRotationRate = (2 * Math.PI) / (saturnCelestial.rotationPeriod);
+            // Desired rings rotation rate based on a 0.45-day period
+            const desiredRingRotationRate = (2 * Math.PI) / SATURN_RINGS_ROTATION_PERIOD;
+            // Compute the relative rotation delta (rad) for this frame
+            const relativeRotationDelta = (desiredRingRotationRate - saturnRotationRate) * simulationTimeDeltaDays;
+            // Apply the additional rotation to the rings around their local Y-axis
+            rings.rotation.y += relativeRotationDelta;
+        }
+    }
+
+    controls.update();
+    renderer.render(scene, camera);
+
+    // Apply real-world orbital drift
+    celestialObjects.forEach(obj => {
+        if (obj.name === 'Moon' && obj.orbitalProperties) {
+            // Moon recession: increase semi-major axis and period
+            const yearsElapsed = simulationDaysElapsed / 365.25;
+            obj.orbitalProperties.semiMajorAxis += MOON_RECESSION_KM_PER_YEAR * yearsElapsed;
+            obj.orbitalProperties.period += MOON_ORBITAL_PERIOD_INCREASE_PER_YEAR * yearsElapsed;
+        }
+        if (obj.name === 'Mercury' && obj.orbitalProperties) {
+            // Corrected Mercury perihelion precession
+            const precessionRatePerDay = MERCURY_PRECESSION_DEG_PER_CENTURY / 36525.0; // Degrees per day
+            obj.orbitalProperties.argumentOfPerihelion += precessionRatePerDay * simulationTimeDeltaDays;
+            obj.orbitalProperties.argumentOfPerihelion %= 360; // Normalize to 0-360 degrees
+        }
+    });
+
+    // Update telemetry panel in real-time if visible
+    if (uiSettings.showTelemetry && window._focusedPlanetName) {
+        const focusedObj = celestialObjects.find(o => o.name === window._focusedPlanetName);
+        if (focusedObj) {
+            window.updateTelemetry(focusedObj);
+        }
+    }
+}
+
+// Handle window resize
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}, false);
+
+// Start animation
+animate();
+console.log("Solar system simulation started with local textures.");
+
+// Provide a no-op telemetry function until the panel is created to avoid errors
+window.updateTelemetry = () => {};
+
+// Hide legacy time-scale slider if present
+const legacyTimeSlider = document.getElementById('time-scale');
+if (legacyTimeSlider && legacyTimeSlider.parentElement) {
+    legacyTimeSlider.parentElement.style.display = 'none';
+}
+
+// Make telemetry panel draggable when it's created
+window.addEventListener('DOMContentLoaded', () => {
+    // Once DOM is loaded, set up drag listeners for the orbital telemetry panel
+    setTimeout(() => {
+        const telemetryPanel = document.getElementById('orbital-telemetry');
+        if (telemetryPanel) {
+            const header = telemetryPanel.querySelector('.panel-header');
+            let dragging = false;
+            let dragOffsetX = 0;
+            let dragOffsetY = 0;
+            
+            if (header) {
+                header.addEventListener('mousedown', e => {
+                    dragging = true;
+                    dragOffsetX = e.clientX - telemetryPanel.offsetLeft;
+                    dragOffsetY = e.clientY - telemetryPanel.offsetTop;
+                    document.body.style.userSelect = 'none';
+                });
+                
+                document.addEventListener('mousemove', e => {
+                    if (!dragging) return;
+                    const newLeft = Math.min(Math.max(0, e.clientX - dragOffsetX), window.innerWidth - telemetryPanel.offsetWidth);
+                    const newTop = Math.min(Math.max(0, e.clientY - dragOffsetY), window.innerHeight - telemetryPanel.offsetHeight);
+                    telemetryPanel.style.left = `${newLeft}px`;
+                    telemetryPanel.style.top = `${newTop}px`;
+                    telemetryPanel.style.right = 'auto';
+                    telemetryPanel.style.bottom = 'auto';
+                });
+                
+                document.addEventListener('mouseup', () => {
+                    dragging = false;
+                    document.body.style.userSelect = '';
+                });
+            }
+        }
+    }, 500); // Small delay to make sure panel exists
+});

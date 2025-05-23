@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solar System Simulation</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="ui.css">
+    <link rel="stylesheet" href="starship-enhanced.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="solar-ui-panel" class="glass-panel">
+        <div class="panel-header" id="solar-ui-header">Solar System Controls</div>
+        <div class="panel-section">
+            <label for="planet-select">Focus on:</label>
+            <select id="planet-select"></select>
+        </div>
+        <div class="panel-section">
+            <label for="size-scale">Planet Size:</label>
+            <input type="range" id="size-scale" min="0.1" max="5" step="0.01" value="1">
+        </div>
+        <div class="panel-section">
+            <label for="sun-size-scale">Sun Size:</label>
+            <input type="range" id="sun-size-scale" min="0.01" max="1" step="0.01" value="0.1">
+        </div>
+        <div class="panel-section">
+            <label for="time-scale">Time Scale:</label>
+            <input type="range" id="time-scale" min="0.01" max="10" step="0.01" value="1">
+        </div>
+    </div>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module" src="main.js"></script>
+</body>
+</html> 
