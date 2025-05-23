@@ -1,0 +1,6 @@
+{
+  "snapshot": "snapshot-20250523-7d132ea8-51e9-4717-acc0-1b2f96f5668d",
+  "install": "python3 -m venv solar_system_env && source solar_system_env/bin/activate && pip install -r requirements.txt",
+  "start": "cd \"solar system\"\npython3 -m http.server 8000",
+  "terminals": []
+}
